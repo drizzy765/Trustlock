@@ -19,7 +19,16 @@ pub const ERR_WRONG_AMOUNT: &str = "ERR_WRONG_AMOUNT";
 pub const ERR_NOT_PAYER: &str = "ERR_NOT_PAYER";
 pub const ERR_DEADLINE: &str = "ERR_DEADLINE";
 
-#[derive(BorshDeserialize, BorshSerialize, near_sdk::serde::Serialize, near_sdk::serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    near_sdk::serde::Serialize,
+    near_sdk::serde::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde")]
 pub enum DealStatus {
@@ -277,9 +286,7 @@ impl Contract {
         let predecessor = env::predecessor_account_id();
         let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
         require!(
-            predecessor == deal.buyer
-                || predecessor == deal.seller
-                || predecessor == self.owner,
+            predecessor == deal.buyer || predecessor == deal.seller || predecessor == self.owner,
             "ERR_NOT_PARTY"
         );
         require!(
