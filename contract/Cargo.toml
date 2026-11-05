@@ -9,7 +9,7 @@ authors = ["Agoro Oluwatimilehin"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "5.5"
+near-sdk = { version = "5.5", features = ["unit-testing"] }
 
 [profile.release]
 codegen-units = 1

@@ -30,9 +30,24 @@ switch ($Target) {
   }
   "contract-test" {
     Set-Location "$Root\contract"
-    cargo test -q
+    # Use full path to cargo if not in PATH, or ensure PATH is set
+    $cargoPath = "$env:USERPROFILE\.cargo\bin\cargo.exe"
+    if (Test-Path $cargoPath) {
+      & $cargoPath test -q
+    } else {
+      cargo test -q
+    }
+  }
+  "contract-check" {
+    Set-Location "$Root\contract"
+    $cargoPath = "$env:USERPROFILE\.cargo\bin\cargo.exe"
+    if (Test-Path $cargoPath) {
+      & $cargoPath check --target wasm32-unknown-unknown
+    } else {
+      cargo check --target wasm32-unknown-unknown
+    }
   }
   default {
-    Write-Host "Targets: agent-install, agent-dev, agent-smoke, web-install, web-dev, contract-test"
+    Write-Host "Targets: agent-install, agent-dev, agent-smoke, web-install, web-dev, contract-test, contract-check"
   }
 }

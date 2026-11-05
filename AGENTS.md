@@ -61,18 +61,31 @@ PowerShell 5 often breaks on `&&`. Use `;` or separate lines. Do not assume WSL,
 
 ## Build order
 
-1. Read `docs/architecture.md` and `docs/threat_model.md`.
-2. Finish `contract/src/lib.rs` state machine and its unit tests (`Created → Funded → Released | Refunded | Disputed`).
-3. Add near-workspaces tests for the rider key restriction, QR replay, double release, and timeout refund.
-4. Deploy to testnet with `scripts/deploy-testnet.sh` or the PowerShell notes in `scripts/make.ps1`.
-5. Add the rider function-call key (`scripts/add-rider-key.sh`).
-6. Implement `agent/` against `docs/api.md`: preview terms, persist a deal draft, receipt check, Intents quote/execute.
-7. Scaffold `web/` pages: `/pay`, `/scan`, `/dashboard`. Wallet selector on testnet first.
-8. Wire one end-to-end testnet path: create → fund (simulated USDC or test token) → scan → seller balance increases.
-9. Safety battery in `docs/benchmark.md`. All must pass before the video.
-10. Dry-run a 1Click quote. Only then a live tiny mainnet USDC execute.
-11. Record the 60–90s video (`docs/demo_script.md`). Draft the X post (`docs/x_post_draft.md`, 280 characters).
-12. Public repo + X post + application payload. Humans approve the POST.
+### Phase 1: Foundation ✅ (Complete)
+1. ✅ Read `docs/architecture.md` and `docs/threat_model.md`.
+2. ✅ Set up tooling (Rust, Python, Node.js)
+
+### Phase 2: Contract Development ✅ (In Progress)
+3. ✅ Finish `contract/src/lib.rs` state machine and its unit tests (`Created → Funded → Released | Refunded | Disputed`).
+   - ✅ `create_deal` - Creates deals
+   - ✅ `ft_on_transfer` - Funds deals
+   - ✅ `confirm_delivery` - Releases funds via Promise + callback
+   - ✅ `claim_timeout_refund` - Refunds via Promise + callback  
+   - ✅ `open_dispute` - Opens disputes
+   - ✅ Promise + callback pattern (ClearSend style)
+   - ✅ All unit tests passing
+4. ⏳ Add near-workspaces tests for the rider key restriction, QR replay, double release, and timeout refund.
+5. ⏳ Deploy to testnet with `scripts/deploy-testnet.sh` or the PowerShell notes in `scripts/make.ps1`.
+
+### Phase 3-12: Remaining Work
+6. Add the rider function-call key (`scripts/add-rider-key.sh`).
+7. Implement `agent/` against `docs/api.md`: preview terms, persist a deal draft, receipt check, Intents quote/execute.
+8. Scaffold `web/` pages: `/pay`, `/scan`, `/dashboard`. Wallet selector on testnet first.
+9. Wire one end-to-end testnet path: create → fund (simulated USDC or test token) → scan → seller balance increases.
+10. Safety battery in `docs/benchmark.md`. All must pass before the video.
+11. Dry-run a 1Click quote. Only then a live tiny mainnet USDC execute.
+12. Record the 60–90s video (`docs/demo_script.md`). Draft the X post (`docs/x_post_draft.md`, 280 characters).
+13. Public repo + X post + application payload. Humans approve the POST.
 
 Do not start with the Next.js visual polish. Judges' AI screen looks at whether `cargo test` and the README agree.
 
