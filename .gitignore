@@ -1,0 +1,44 @@
+# secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.seed
+.near-credentials/
+**/.near-credentials/
+credentials.json
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# node
+node_modules/
+.next/
+web/.next/
+web/out/
+dist/
+*.tsbuildinfo
+
+# rust
+contract/target/
+target/
+**/*.rs.bk
+
+# os / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# media we should not blindly commit
+*.mov
+raw-recordings/
+
+# agent junk
+.cursor/
