@@ -6,7 +6,8 @@ use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
 use near_sdk::{
-    env, near, require, AccountId, BorshStorageKey, PanicOnDefault, PromiseOrValue,
+    env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise,
+    PromiseOrValue,
 };
 
 pub const ERR_ALREADY_RELEASED: &str = "ERR_ALREADY_RELEASED";
@@ -18,8 +19,9 @@ pub const ERR_WRONG_AMOUNT: &str = "ERR_WRONG_AMOUNT";
 pub const ERR_NOT_PAYER: &str = "ERR_NOT_PAYER";
 pub const ERR_DEADLINE: &str = "ERR_DEADLINE";
 
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, PartialEq, Eq)]
+#[derive(BorshDeserialize, BorshSerialize, near_sdk::serde::Serialize, near_sdk::serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[borsh(crate = "near_sdk::borsh")]
+#[serde(crate = "near_sdk::serde")]
 pub enum DealStatus {
     Created,
     Funded,
@@ -145,7 +147,7 @@ impl Contract {
         PromiseOrValue::Value(U128(0))
     }
 
-    pub fn confirm_delivery(&mut self, deal_id: u64, qr_preimage_hex: String) {
+    pub fn confirm_delivery(&mut self, deal_id: u64, qr_preimage_hex: String) -> Promise {
         let now = env::block_timestamp_ms();
         let predecessor = env::predecessor_account_id();
         let hash = hex_keccak(&qr_preimage_hex);
@@ -165,11 +167,51 @@ impl Contract {
         let qr_hash = deal.qr_hash;
         self.used_qr.insert(qr_hash, deal_id);
 
-        // TODO: Promise transfer of `price` USDC to `seller`, then
-        // `on_payout` callback should set Released or revert to Funded.
-        let _ = (seller, price);
-        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
-        deal.status = DealStatus::Released;
+        // Transfer USDC to seller via ft_transfer
+        let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+            "ft_transfer".to_string(),
+            near_sdk::serde_json::json!({
+                "receiver_id": seller,
+                "amount": price.to_string(),
+            })
+            .to_string()
+            .into_bytes(),
+            NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+            Gas::from_tgas(50),
+        );
+
+        // Schedule callback to handle success/failure
+        transfer_promise.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(Gas::from_tgas(10))
+                .on_payout(deal_id, DealStatus::Funded),
+        )
+    }
+
+    /// Callback after payout attempt. If transfer failed, restore to Funded state.
+    #[private]
+    pub fn on_payout(&mut self, deal_id: u64, prev_status: DealStatus) -> bool {
+        let promise_result = env::promise_result_checked(0, 1024);
+        match promise_result {
+            Ok(_) => {
+                // Transfer succeeded, mark as Released
+                let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+                deal.status = DealStatus::Released;
+                env::log_str(&format!(
+                    "EVENT_JSON:{{\"event\":\"released\",\"deal_id\":{}}}",
+                    deal_id
+                ));
+                true
+            }
+            Err(_) => {
+                // Transfer failed, restore previous state so it can be retried
+                let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+                deal.status = prev_status;
+                deal.qr_consumed = false; // Allow retry with same QR
+                env::log_str("payout failed; state restored");
+                false
+            }
+        }
     }
 
     pub fn claim_timeout_refund(&mut self) {
@@ -178,7 +220,7 @@ impl Contract {
         env::panic_str("ERR_USE_claim_timeout_refund_for");
     }
 
-    pub fn claim_timeout_refund_for(&mut self, deal_id: u64) {
+    pub fn claim_timeout_refund_for(&mut self, deal_id: u64) -> Promise {
         let now = env::block_timestamp_ms();
         let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
         require!(deal.status == DealStatus::Funded, ERR_BAD_STATUS);
@@ -186,10 +228,49 @@ impl Contract {
         deal.status = DealStatus::Expired;
         let payer = deal.payer.clone().expect(ERR_NOT_PAYER);
         let price = deal.price;
-        let _ = (payer, price);
-        // TODO: transfer USDC back to payer, callback -> Refunded.
-        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
-        deal.status = DealStatus::Refunded;
+
+        // Transfer USDC back to payer via ft_transfer
+        let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+            "ft_transfer".to_string(),
+            near_sdk::serde_json::json!({
+                "receiver_id": payer,
+                "amount": price.to_string(),
+            })
+            .to_string()
+            .into_bytes(),
+            NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+            Gas::from_tgas(50),
+        );
+
+        // Schedule callback to handle success/failure
+        transfer_promise.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(Gas::from_tgas(10))
+                .on_refund(deal_id),
+        )
+    }
+
+    /// Callback after refund attempt. If transfer failed, restore to Expired state.
+    #[private]
+    pub fn on_refund(&mut self, deal_id: u64) -> bool {
+        let promise_result = env::promise_result_checked(0, 1024);
+        match promise_result {
+            Ok(_) => {
+                // Transfer succeeded, mark as Refunded
+                let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+                deal.status = DealStatus::Refunded;
+                env::log_str(&format!(
+                    "EVENT_JSON:{{\"event\":\"refunded\",\"deal_id\":{}}}",
+                    deal_id
+                ));
+                true
+            }
+            Err(_) => {
+                // Transfer failed, keep in Expired state for retry
+                env::log_str("refund failed; state preserved as Expired");
+                false
+            }
+        }
     }
 
     pub fn open_dispute(&mut self, deal_id: u64, _reason: String) {
