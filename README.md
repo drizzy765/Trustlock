@@ -6,7 +6,7 @@ Pay-on-delivery escrow for African Instagram and WhatsApp commerce. The **dispat
 **Tracks:** `realworld` and `business`  
 **Deadline:** 14 November 2026, 23:59 UTC (15 November 00:59 WAT / 14 November 15:59 America/Los_Angeles)  
 **Judging:** 16–18 November 2026  
-**Built solo by Agoro Oluwatimilehin (Timi)**
+**Built by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Mikezx8** (see [Team and responsibilities](#team-and-responsibilities))
 
 The intended flow is that a buyer locks USDC in a NEAR escrow, a seller confirms the deal terms, and a dispatch rider confirms delivery with a one-time buyer-authorized QR. A deadline enables a refund if delivery is not confirmed. The agent is designed to help with terms and deterministic naira-receipt checks, but it must never hold a key that can move funds.
 
@@ -32,6 +32,21 @@ implement or verify every TrustLock target; see the implementation status and
 milestones below.
 
 Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and do-X-see-Y README; [Penstock](https://github.com/ace-coderr/penstock)'s real mainnet proof and honest demo/dry/live labels; [NairaRails](https://github.com/Esimuda/nairarails)'s African money framing and short problem-first demo.
+
+## Team and responsibilities
+
+| Member | GitHub | Owns | Issues |
+| --- | --- | --- | --- |
+| Agoro Oluwatimilehin (Timi) | [@drizzy765](https://github.com/drizzy765) | Escrow contract and unit tests, Next.js `/pay` `/scan` `/dashboard`, testnet wallet, 1Click quotes, testnet end-to-end run, README judge path, demo video, X post and submission | #5, #8, #9, #10, #12, #13 (stretch #11, #14, #17, #18) |
+| Brayan Sorgho | [@Sorghobrayan-dotcom](https://github.com/Sorghobrayan-dotcom) | Deal agent: multilingual preview (Pidgin, Yoruba, English), refusal to release funds or return keys, deal API endpoints | #2, #4 (stretch #15, #16, #19) |
+| Mikezx8 | [@Mikezx8](https://github.com/Mikezx8) | Security: contract and threat-model review, rider function-call key and its confinement tests, agent safety battery | #3, #6, #7, #21 |
+
+How we work:
+
+- Every change goes through a pull request with green CI, a CodeRabbit review and one teammate approval. Mikezx8 reviews anything touching the contract or rider keys.
+- The testnet scan-and-pay run (#10) comes first; polish comes after it works.
+- Feature freeze on Friday 14 November, morning UTC. After that, only fixes, the README, the video and the submission. Deadline: 14 November 2026, 23:59 UTC.
+- The README only claims what the code and tests actually do.
 
 ## Repository layout
 
