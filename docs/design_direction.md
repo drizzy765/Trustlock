@@ -27,17 +27,17 @@ Refero and Mobbin were tried first, but both MCP subscriptions are inactive (`NO
 
 | # | Reference | What we take | What we leave |
 |---|---|---|---|
-| 1 | **PayBox**, [paybox.sh](https://paybox.sh) (MoonPay's non-custodial payment vault for AI agents. It's the crypto payments one, launched 29 Jul 2026 per [MoonPay's newsroom](https://www.moonpay.com/newsroom/moonpay-paybox-grok)) | **Primary reference.** A near-black (`#141414`) and off-white (`#faf9f9`) system. A cinematic full-bleed photo of real street life with one **frosted-glass 3D cube** (the vault) floating over it. A big plain grotesk headline set bottom-left. Small pill buttons in the nav. Numbered security steps ("01 Keys are sharded… 02 Policies set clear boundaries…"). Glass borders at white/10. Söhne-style grotesk plus mono. | Their stats band ("$50B+ secured · 10M+ wallets*") and "audited by" logos. We have no such facts. Also their paid Söhne font, which we swap for free Geist. |
+| 1 | **PayBox**, [paybox.sh](https://paybox.sh) (MoonPay's non-custodial payment vault for AI agents. It's the crypto payments one, launched 29 Jul 2026 per [MoonPay's newsroom](https://www.moonpay.com/newsroom/moonpay-paybox-grok)) | **Primary reference.** A near-black (`#141414`) and off-white (`#faf9f9`) system. A cinematic full-bleed photo with one **frosted-glass 3D cube** (the vault) floating over it. We take the composition, not their street subject; our photos are corporate (§5.6). A big plain grotesk headline set bottom-left. Small pill buttons in the nav. Numbered security steps ("01 Keys are sharded… 02 Policies set clear boundaries…"). Glass borders at white/10. Söhne-style grotesk plus mono. | Their stats band ("$50B+ secured · 10M+ wallets*") and "audited by" logos. We have no such facts. Also their paid Söhne font, which we swap for free Geist. |
 | 2 | **NEAR**, [near.org](https://near.org) | A dark canvas, a centred short headline, a solid white primary button next to an outlined secondary button, and one animated geometric motif (a field of four-point sparkles). It's the chain we build on, so our pages should sit comfortably next to theirs. | NEAR's brand green as our accent. That's their colour, not ours. |
-| 3 | **Flutterwave**, [flutterwave.com](https://flutterwave.com/us/) | **African-seller realism.** Real merchant photography with the business named in the caption ("E25 Dresses"). Copy written for small businesses, not crypto natives. | The orange display serif and the light theme. |
+| 3 | **Flutterwave**, [flutterwave.com](https://flutterwave.com/us/) | **African-business realism.** Real photography of real businesses, with the business named in the caption ("E25 Dresses"). Copy written for businesses, not crypto natives. (We take the realism, but use a more corporate photo subject; see §5.6.) | The orange display serif and the light theme. |
 | 4 | **Privy (a Stripe company)**, [privy.io](https://www.privy.io) | Real product mockups in the hero, with a phone over a desktop dashboard. A clean bento grid with one visual per card. Product-UI density for `/dashboard`. | Their customer logo strip. Ours will be a "Built with" strip. |
 | 5 | **Linear**, [linear.app](https://linear.app) | Polish rules: hairline borders, a tight type scale, restrained motion, dark product screenshots as the main imagery. | — |
 
 Secondary checks: [stripe.com](https://stripe.com) (WebGL gradient hero, a stats band backed by real numbers), [phantom.com](https://phantom.com) (floating token "blobs" on a dark rounded hero card, pill nav), [mercury.com](https://mercury.com) (banking-grade calm), [yellowcard.io](https://yellowcard.io) and [kotanipay.com](https://www.kotanipay.com) (African stablecoin peers). Paystack (paystack.com) blocks automated fetches, so open it in a browser if you want its African merchant tone. It wasn't used as evidence here.
 
-## 3. The direction: "Glass Vault at the Door"
+## 3. The direction: "Glass Vault"
 
-**One dominant direction.** We use PayBox's cinematic dark vault language and point it at the doorstep of any small business, starting with Lagos, Accra and Nairobi. Each page is a near-black canvas with real, warm, documentary photography of African sellers and dispatch riders. Over the photo floats a single frosted-glass **lock block**, the escrow, rendered as a translucent cube with a soft amber core while funds are locked. When delivery is proven (the buyer taps "I received it" or the rider scans), the block clears, the amber turns to green, and a mono receipt line prints the transaction hash. Type is big, plain and confident (Geist). Every on-chain fact (account IDs, amounts, hashes) is set in Geist Mono, so "this is real data" has its own visual voice.
+**One dominant direction.** We take PayBox's cinematic dark vault language and give it a corporate, institutional frame: TrustLock should look like infrastructure that serious African businesses run on, from Lagos, Accra and Nairobi to Johannesburg. Each page is a near-black canvas with **real, licensed photographs** of professional African businesspeople in modern offices, boardrooms and logistics operations, given one consistent dark grade (§5.6). There are no market stalls, street scenes or doorsteps. Over the photo floats a single frosted-glass **lock block**, the escrow, rendered as a translucent cube with a soft amber core while funds are locked. When delivery is proven (the buyer taps "I received it" or the rider scans), the block clears, the amber turns to green, and a mono receipt line prints the transaction hash. Type is big, plain and confident (Geist). Every on-chain fact (account IDs, amounts, hashes) is set in Geist Mono, so "this is real data" has its own visual voice.
 
 Signature traits to keep, never water down:
 0. **The tagline is the system.** "AI does the work. Cryptography holds the money." The agent gets soft UI (chat bubbles, drafts); money gets hard UI (glass block, mono, chain links).
@@ -46,7 +46,7 @@ Signature traits to keep, never water down:
 3. **Mono for chain truth.** If it came from the chain, it's in mono with a copy button and an explorer link.
 4. **Numbered steps** (01, 02, 03) for anything that explains trust.
 
-Rejected alternatives: light Stripe-style gradients (too generic, and they fight the dark NEAR ecosystem), Afro-pattern maximalism (it reads as a theme rather than as infrastructure), and neon "web3" purple (the generic AI look the user wants to escape).
+Rejected alternatives: light Stripe-style gradients (too generic, and they fight the dark NEAR ecosystem), Afro-pattern maximalism and local-market or street imagery (it reads as a theme rather than as infrastructure, and the user wants a corporate feel), and neon "web3" purple (the generic AI look the user wants to escape).
 
 ## 4. Design tokens
 
@@ -109,7 +109,7 @@ Use `text-wrap: balance` on headings and `text-wrap: pretty` on paragraphs. No i
 
 | Pattern | Live example | What it does |
 |---|---|---|
-| **Glass 3D object over photography** | [paybox.sh](https://paybox.sh) | A frosted cube (the vault) floats over a moody street photo. The object is the metaphor. |
+| **Glass 3D object over photography** | [paybox.sh](https://paybox.sh) | A frosted cube (the vault) floats over a moody, cinematic photo. The object is the metaphor. (We keep the object and swap the scene for corporate photography.) |
 | **Animated geometric field** | [near.org](https://near.org) | Four-point sparkles fill the background. Cheap, on-brand and loops forever. |
 | **Floating tokens or blobs** | [phantom.com](https://phantom.com) | Coin-like discs drift on a dark hero card. |
 | **WebGL gradient mesh** | [stripe.com](https://stripe.com) | A slow, shader-driven colour wave behind the headline. |
@@ -141,7 +141,7 @@ Use `text-wrap: balance` on headings and `text-wrap: pretty` on paragraphs. No i
   1. *Created:* a hollow glass outline.
   2. *Funded:* an amber core glowing inside, a slow pulse, a mono label `12.00 USDC · locked`.
   3. *Released* (after the buyer's one-tap confirm or the rider's scan): the core flashes green, the cube "unlatches" (top face lifts 8px, opacity eases), and a receipt line types out `released → seller.testnet · tx 9fK…2a`.
-- **The proof moment as hero** (rider scan shown, because it's the most visual of the two release proofs): on `/`, the photo shows a rider at a doorstep holding a phone toward the buyer's phone (a cropped, warm, slightly desaturated photo). The lock block floats above the phones. An autoplay sequence of about 6s (desktop) or a tap-to-play button (mobile) runs Funded → scan beam sweeps → Released. Under it in small mono text: `Simulation. See the real testnet run →`. The link only appears once #10 has an explorer link.
+- **The proof moment as hero** (rider scan shown, because it's the most visual of the two release proofs): on `/`, the background is a dark-graded, real photo of a professional logistics or business setting (a warehouse dispatch team checking a tablet, or a businessperson closing a deal on a phone; see §5.6). The lock block floats in the negative space, and a phone UI mock of the scan or confirm screen sits beside it. An autoplay sequence of about 6s (desktop) or a tap-to-play button (mobile) runs Funded → scan beam sweeps → Released. Under it in small mono text: `Simulation. See the real testnet run →`. The link only appears once #10 has an explorer link.
 - **Desktop build:** r3f + drei `MeshTransmissionMaterial` (or a Spline export if time is short), lazy-loaded.
 - **Mobile and fallback build:** CSS 3D cube (6 divs, `preserve-3d`, 12% white faces, amber or green inner `radial-gradient`), animated with Motion. Same states, about 2 KB.
 - **Static fallback:** a pre-rendered transparent WebP of the cube for each state (export three frames from the same scene) for `prefers-reduced-motion`, Save-Data, or no JS.
@@ -161,10 +161,56 @@ const lowEnd =
 ### 5.5 Asset sources (free or properly licensed)
 
 - **3D:** build the lock block ourselves in Spline (free plan, our own scene) or Blender. Optional free 3D icons: [3dicons.co](https://3dicons.co) (CC0). HDRI lighting for glass: [Poly Haven](https://polyhaven.com) (CC0).
-- **Photography:** commission it or shoot it ourselves. A real rider and a real seller we know, with signed consent, is best and most honest. Stock options to check before use: Unsplash (Unsplash License) or Pexels, searching "dispatch rider Africa", "African small business owner" and "market seller". Credit photographers in the footer anyway. Never present a stock model as a TrustLock customer. Captions describe the scene ("A dispatch rider in Lagos"), not a customer story.
+- **Photography:** real, licensed photographs only. The rules and the verified shortlist are in §5.6.
 - **Icons:** [Lucide](https://lucide.dev) (ISC, ships with shadcn). Stroke 1.5, 20px.
 - **Lottie:** [LottieFiles](https://lottiefiles.com). Check each file's licence, prefer the free "Lottie Simple License", or make our own.
 - **Fonts:** Geist and Geist Mono (SIL OFL) from Google Fonts.
+
+### 5.6 Photography and art direction (real photos only)
+
+**Subject:** TrustLock is infrastructure for serious businesses, so the people in our photos look like professionals at work. Think African businesspeople in modern offices and boardrooms, operations and logistics teams in warehouses, professional couriers in uniform, and people closing deals on laptops and phones. The feeling should be corporate, competent and calm.
+
+**Hard rules**
+- **Real photographs only.** **No AI-generated images of people, ever**, including "AI-enhanced" faces or generated backgrounds containing people. AI tools may only be used for non-human assets we build ourselves (the 3D lock block).
+- **No local-market, street-stall, doorstep or roadside scenes**, and no poverty or "aid" imagery. Delivery is shown through professional logistics (warehouses, dispatch teams, couriers in uniform), never a doorstep handover.
+- **Licensed only:** the [Unsplash License](https://unsplash.com/license) (free, no attribution required, but we credit anyway), the [Pexels License](https://www.pexels.com/license/), or properly purchased stock. **Unsplash+ photos are paid and need an Unsplash+ licence.** Many of the best "African business" results on Unsplash are Unsplash+ (Getty Images), so check the badge before using one.
+- **Credit every photographer** in `web/public/photos/CREDITS.md` (photo URL, photographer, licence, date checked), plus a short "Photos: Unsplash / name" line in the footer.
+- Never present a stock model as a TrustLock customer, seller or rider. Captions describe the scene ("Operations team, warehouse"). No names, no quotes, no customer stories.
+- Don't add photos to the repo until the licence is confirmed. Links are enough for now.
+
+**Treatment** (so mixed stock looks like one shoot):
+1. **Dark grade:** lift blacks into `#0B0C0B` and pull highlights down about 10%. A CSS overlay is `linear-gradient(180deg, rgba(11,12,11,.35), rgba(11,12,11,.85))`.
+2. **Desaturate** to roughly 70% saturation, with a slight warm shift in skin tones and neutral to cool shadows. Never orange or teal.
+3. **Consistent lighting:** prefer soft window light and interiors with glass and steel. Avoid harsh flash and busy colourful backgrounds.
+4. **Crop for negative space** (subject on the left or right third) so the lock block and copy sit on calm areas. Apply `object-position` per breakpoint.
+5. Optional 2% film grain (SVG noise) on all photos for cohesion. Never blur faces.
+6. **Delivery:** `next/image` as AVIF/WebP, at most 1600px wide (hero) or 800px (sections), with `priority` only on the hero.
+
+**Verified shortlist (checked 11 Nov 2026)**
+
+Every page below loaded and showed "Free to use under the Unsplash License". The photographer name is as shown on the page. Re-check each licence on the day you download.
+
+| # | Subject | Page | Photographer | Licence | Suggested use |
+|---|---|---|---|---|---|
+| 1 | Boardroom meeting: a team of Black professionals around a white table in a glass-walled office | [unsplash.com/photos/…-AekHsx1SxXQ](https://unsplash.com/photos/a-group-of-people-sitting-around-a-white-table-AekHsx1SxXQ) | Ninthgrid | Unsplash License (free) | Hero, "For businesses" split |
+| 2 | Three women at a boardroom table with laptops, city windows behind | [unsplash.com/photos/…-UcZcsHSp8o4](https://unsplash.com/photos/photography-of-three-women-sits-beside-table-inside-room-during-daytime-UcZcsHSp8o4) | Christina @ wocintechchat.com M | Unsplash License (free) | Dashboard / "For businesses" |
+| 3 | Team meeting in a modern conference room | [unsplash.com/photos/…-rg1y72eKw6o](https://unsplash.com/photos/photography-of-people-inside-room-during-daytime-rg1y72eKw6o) | Christina @ wocintechchat.com M | Unsplash License (free) | Onboarding background |
+| 4 | Two businesswomen reviewing work on laptops | [unsplash.com/photos/…-bD3DiLuuOPM](https://unsplash.com/photos/a-couple-of-women-standing-next-to-each-other-with-laptops-bD3DiLuuOPM) | Ninthgrid | Unsplash License (free) | Bring-your-own-agent page |
+| 5 | Businesswoman working on a MacBook in an office lounge | [unsplash.com/photos/…-e6wu8EiFUB0](https://unsplash.com/photos/woman-sitting-and-smiling-with-macbook-on-her-lap-e6wu8EiFUB0) | Christina @ wocintechchat.com M | Unsplash License (free) | Seller onboarding |
+| 6 | Portrait: businesswoman in an orange blazer, arms crossed | [unsplash.com/photos/…-AzVexpHvuKY](https://unsplash.com/photos/woman-in-orange-blazer-standing-AzVexpHvuKY) | Etty Fidele | Unsplash License (free) | Section portrait, OG image |
+| 7 | Professional man in a shirt by an office window | [unsplash.com/photos/…-afqRNiMCELc](https://unsplash.com/photos/man-standing-near-window-afqRNiMCELc) | Sowemimo Bamidele | Unsplash License (free) | Section portrait |
+| 8 | Businessman in a tie reading papers beside a glass skyscraper | [unsplash.com/photos/…-GzumspFznSE](https://unsplash.com/photos/man-standing-near-high-rise-building-GzumspFznSE) | bruce mars | Unsplash License (free) | "The rule" band |
+| 9 | Logistics: warehouse worker in a hard hat checking stock on shelves | [unsplash.com/photos/…-N_nAAwnBDy8](https://unsplash.com/photos/a-man-in-a-hard-hat-is-looking-at-a-piece-of-paper-N_nAAwnBDy8) | Ali Mkumbwa | Unsplash License (free) | How it works, step 03 (delivery) |
+| 10 | Operations: engineer in a hard hat checking a smartphone | [unsplash.com/photos/…-xdS9XEoKBLY](https://unsplash.com/photos/man-in-red-blue-and-white-plaid-dress-shirt-wearing-yellow-hat-holding-black-smartphone-xdS9XEoKBLY) | Emmanuel Ikwuegbu | Unsplash License (free) | Rider / proof section |
+| 11 | Architecture: the Bank of Industry building (Nigeria) against blue sky | [unsplash.com/photos/…-nv3iT1G4k2c](https://unsplash.com/photos/the-bank-of-industry-building-rises-high-in-the-sky-nv3iT1G4k2c) | Praise Godwin | Unsplash License (free) | Footer / about band |
+| 12 | Architecture: modern city skyline with mixed high-rises | [unsplash.com/photos/…-8JnXfVk6PdI](https://unsplash.com/photos/modern-cityscape-with-diverse-architectural-buildings-under-a-cloudy-sky-8JnXfVk6PdI) | Seth Salimo | Unsplash License (free) | Landing background texture |
+
+Rejected while checking:
+- Strong "African business" results that turned out to be **Unsplash+** (paid, mostly Getty Images), for example `pqiqRpE73Xs`, `bFbfXYUwenI`, `CiTaJvFjE5k`, `MBf1ehMmV3A` and `WGIVlmnXLbY`.
+- Market, street and doorstep scenes, by rule.
+- Pexels pages: Pexels blocks automated checks, so none could be verified here. Add Pexels photos only after checking them by hand in a browser.
+
+Gap: free, verified photos of uniformed African **courier and dispatch** teams were thin. Best option is to commission a short shoot with a real logistics partner (with signed model releases), or license one from a stock library.
 
 ## 6. Social proof, done honestly
 
@@ -205,7 +251,7 @@ Rhythm modelled on PayBox's alternating cinematic and dense sections, not the ge
 1. **Hero** (100svh): photo + lock block + one sentence + two buttons + mode badge.
 2. **The rule** (a short dark band): one large line, "AI does the work. Cryptography holds the money." Sub: "The agent can read, check and prepare. Only your buyer's confirmation, the rider's scan or the deadline can move funds."
 3. **How it works:** numbered 01 / 02 / 03 / 04 rows (Share a link · Buyer pays into escrow · Proof of delivery · Paid or refunded), with a lock-block state thumbnail beside each.
-4. **For sellers:** a Flutterwave-style real-photo split with seller benefits and "Set up your store" leading to `/onboard`.
+4. **For sellers:** a Flutterwave-style split with a real corporate photo (§5.6) with seller benefits and "Set up your store" leading to `/onboard`.
 5. **Bring your own AI agent:** the provider row, "planned" or "works with", plus the safety statement (see §10).
 6. **Proof:** safety scoreboard plus testnet run card (§6.3).
 7. **Where it fits:** use-case cards.
@@ -374,6 +420,31 @@ The current stack: Next.js 15 + React 19, **no Tailwind, no shadcn**, inline sty
 - [ ] **Honesty pass before submission:** every number, logo and "works with" label is backed by code or a link.
 
 **Priority order for the 3 days:** `/pay/[dealId]` (link → pay → confirm) → `/scan` success screen → `/dashboard` with create-link → `/` hero → `/onboard` → `/agents`. The link-to-paid moment is the demo.
+
+## 12a. Brand: the "check lock" mark
+
+**Files** (hand-built SVGs; the wordmark is converted to outlines from Geist Medium, so it renders the same everywhere, GitHub included, with no font dependency):
+
+| File | Use |
+|---|---|
+| [`web/public/brand/trustlock-mark.svg`](../web/public/brand/trustlock-mark.svg) | Mark only, black `#0B0C0B`, for light backgrounds |
+| [`web/public/brand/trustlock-logo-light.svg`](../web/public/brand/trustlock-logo-light.svg) | Horizontal lockup, black mark and wordmark, for light backgrounds |
+| [`web/public/brand/trustlock-logo-dark.svg`](../web/public/brand/trustlock-logo-dark.svg) | The same lockup inverted (`#F4F2EE`), for dark backgrounds, which is our default canvas |
+| [`web/public/brand/trustlock-icon.svg`](../web/public/brand/trustlock-icon.svg) | Favicon and app icon: off-white mark on a `#0B0C0B` rounded square (14/64 radius) |
+
+**The mark:** a rounded-square padlock body. Its shackle is one thick stroke that rises from the left post, arcs over, and finishes on the right as a checkmark tick instead of closing. The open shackle turning into a check reads as "verified, then released", which is exactly what the contract does. A single amber `#F2B544` keyhole dot sits centred in the body. That dot is the only colour in the logo, and it reuses the locked-funds amber from §4.1.
+
+**Wordmark:** "TrustLock" in Geist Medium (weight 500, tracking -0.025em), to the right of the mark, in the same colour as the mark.
+
+**Rules**
+- Clear space is at least the keyhole dot's diameter × 2 on every side.
+- Minimum size: the mark at 16px (favicon) and the lockup at 96px wide.
+- Don't recolour the keyhole, add gradients or glass effects to the logo, put it on photos without a solid scrim, or stretch it.
+- The frosted-glass lock block (§5.3) is the *hero illustration*. It isn't the logo. Keep them separate.
+
+**README:** the top of the README uses a `<picture>` element with `prefers-color-scheme` sources, so GitHub shows the dark lockup in dark mode and the light lockup in light mode.
+
+**In the app (when #8 lands):** `app/icon.svg` can simply be a copy of `trustlock-icon.svg` (Next.js picks it up automatically). Use `trustlock-logo-dark.svg` in the nav.
 
 ## 13. Shared testnet env
 

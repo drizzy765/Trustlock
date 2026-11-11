@@ -1,6 +1,14 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/brand/trustlock-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="web/public/brand/trustlock-logo-light.svg">
+    <img alt="TrustLock" src="web/public/brand/trustlock-logo-light.svg" width="360">
+  </picture>
+</p>
+
 # TrustLock
 
-Pay-on-delivery escrow for African Instagram and WhatsApp commerce. The **dispatch rider is the proof**.
+Pay on delivery for African sellers across social media and any chat app. **AI does the work, cryptography holds the money:** funds release only on proof of delivery (the buyer's confirmation or the dispatch rider's one-time QR scan).
 
 **Hackathon:** [NEAR HACKATHON](https://nearhackathon.com) · brief: [HACKATHON.md](https://nearhackathon.com/HACKATHON.md)  
 **Tracks:** `realworld` and `business`  

@@ -107,6 +107,6 @@ Do not copy their code verbatim into this repo. Do not copy their credentials, a
 
 ## Out of scope
 
-- Shipping a production WhatsApp Business integration (Meta error 131031 still blocks Sell-Safe). Instagram-first, WhatsApp waitlist is fine to mention.
+- Shipping a production WhatsApp Business integration (Meta error 131031 still blocks Sell-Safe). TrustLock works through a shareable payment link in any chat app; the WhatsApp waitlist is fine to mention.
 - Replacing the receipt engine with "ask Muse whether this looks paid."
 - A second token besides USDC on NEAR for v1 (Intents may *take* another asset; the escrow itself holds USDC).
