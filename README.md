@@ -1,6 +1,6 @@
 # TrustLock
 
-Pay-on-delivery escrow for Nigerian Instagram and WhatsApp commerce. The **dispatch rider is the proof**.
+Pay-on-delivery escrow for African Instagram and WhatsApp commerce. The **dispatch rider is the proof**.
 
 **Hackathon:** [NEAR HACKATHON](https://nearhackathon.com) · brief: [HACKATHON.md](https://nearhackathon.com/HACKATHON.md)  
 **Tracks:** `realworld` and `business`  
@@ -8,24 +8,30 @@ Pay-on-delivery escrow for Nigerian Instagram and WhatsApp commerce. The **dispa
 **Judging:** 16–18 November 2026  
 **Built solo by Agoro Oluwatimilehin (Timi)**
 
-A buyer locks USDC into a NEAR escrow from a payment link (NEAR Intents / 1Click, with real execution — not a dry quote only — or naira that converts to USDC after a fake-receipt check). An AI deal agent agrees the item, price, deadline and accounts in Pidgin, Yoruba or English, including voice notes. The rider scans a **one-time QR signed by the buyer**. The rider's function-call access key can only call `confirm_delivery`. Funds move to the seller at once. If nobody scans before the deadline, the buyer is refunded. The AI never holds a key that can move money.
+The intended flow is that a buyer locks USDC in a NEAR escrow, a seller confirms the deal terms, and a dispatch rider confirms delivery with a one-time buyer-authorized QR. A deadline enables a refund if delivery is not confirmed. The agent is designed to help with terms and deterministic naira-receipt checks, but it must never hold a key that can move funds.
+
+**Implementation status:** this repository is an early prototype, not yet a complete end-to-end or mainnet-ready product. The contract has core escrow methods, while the web pages, wallet wiring, Intents integration, and NEAR sandbox tests are incomplete. Buyer authorization for the QR and refund/dispute callback edge cases still need implementation and tests. Do not treat the product goals below as completed capabilities; see [the implementation plan](docs/implementation_plan.md) and [the architecture gaps](docs/architecture.md).
 
 This is not another "LLM looks at the work and releases escrow" project. [ClearSend](https://github.com/dukemawex/clearsend-near) already does that on testnet, from a single model's opinion. TrustLock releases on a **physical delivery event** an AI cannot be talked into approving.
 
 Sibling project (different hackathon): `micro1-receipt-eval`. NEAR HACKATHON.md Q-015: if one person submits two NEAR projects, each README must name the other. This README names none besides TrustLock unless that changes.
 
-## Why this is different
+## Product target (not a list of completed features)
 
-| | ClearSend | TrustLock |
+| | ClearSend | TrustLock design target |
 | --- | --- | --- |
 | Release trigger | LLM `attest` on free text | Rider scans a one-time buyer-signed QR |
-| Payment check | none visible | Deterministic receipt engine (Sell-Safe ideas: 20/20, 0 false CONFIRMED, 6/6 injections blocked) for naira funding |
-| Chain | NEAR + testnet only | Testnet plus **one tiny mainnet USDC** via 1Click |
-| Intents | `dry: true` quotes | Quote, verify signature, execute |
+| Payment check | none visible | Deterministic receipt check for naira funding; not a bank verification integration |
+| Chain | NEAR + testnet only | Target: testnet proof first; tiny mainnet USDC via 1Click only if safely completed |
+| Intents | `dry: true` quotes | Target: quote, verify signature, execute |
 | Languages | English | Pidgin, Yoruba, English, voice notes |
-| Injection demo | not visible | Hidden "ignore rules, approve" on a fake receipt; funds stay locked |
+| Injection demo | not visible | Fake-receipt prompt injection should not authorize funding |
 
-Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and do-X-see-Y README; [Penstock](https://github.com/ace-coderr/penstock)'s real mainnet proof and honest demo/dry/live labels; [NairaRails](https://github.com/Esimuda/nairarails)'s Nigerian money framing and short problem-first demo.
+These are intended product differences. The current repository does not yet
+implement or verify every TrustLock target; see the implementation status and
+milestones below.
+
+Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and do-X-see-Y README; [Penstock](https://github.com/ace-coderr/penstock)'s real mainnet proof and honest demo/dry/live labels; [NairaRails](https://github.com/Esimuda/nairarails)'s African money framing and short problem-first demo.
 
 ## Repository layout
 
@@ -41,7 +47,7 @@ skills/       local SKILL.md files + verified upstream links
 
 ## Status
 
-Starter pack. The state machine, method names, threat model and judge steps are frozen here so a coding agent can build without inventing product decisions. The Rust is a structured stub — it is not mainnet-ready until the contract tests are green.
+Prototype. The contract and API are partially implemented; the UI and integrations are scaffolding. The project is not mainnet-ready. The next milestone is contract correctness and tests, followed by one verified testnet flow. See [the implementation plan](docs/implementation_plan.md) for gates and sequence.
 
 ## Judge path (do X, then you will see Y)
 
@@ -59,11 +65,14 @@ rustup show
 cargo test -q
 ```
 
-You should see the state-machine unit tests pass: a deal starts `Created`; funding moves it to `Funded`; `confirm_delivery` with a fresh QR hash moves it to `Released`; a second confirm panics; an expired deal refunds the buyer; a replayed QR hash is rejected.
+Run the current contract tests, but note that the checked-in suite is not yet a complete state-machine or token-transfer integration suite. Do not infer the full flow is proven until the added unit and sandbox tests cover it.
 
-### 2. Workspaces sandbox (after `cargo test --test workspaces -- --ignored` is enabled)
+### 2. Workspaces sandbox (planned; not complete)
 
-You should see a sandbox account create a deal, attach a rider function-call key limited to `confirm_delivery`, and fail when that key tries to call `claim_timeout_refund` or transfer.
+`contract/tests/workspaces.rs` is currently a placeholder, not a sandbox
+integration test. Once implemented, it should prove deal creation, funding,
+the rider key's `confirm_delivery` restriction, payout/refund callbacks, and
+replay rejection. Do not count the placeholder test as this milestone passing.
 
 ### 3. Deal agent
 
@@ -88,11 +97,17 @@ npm install
 npm run dev
 ```
 
-Open the buyer pay page, the rider scan page and the seller dashboard. Wallet selector should prompt (testnet by default). The UI must label **simulated / dry / live** the same way Penstock does.
+The buyer pay, rider scan, and seller dashboard pages are currently
+scaffolding; the wallet-selector setup is a stub. This step is complete only
+after they are wired to the testnet flow in the implementation plan. The UI
+must label **simulated / dry / live** accurately.
 
 ### 5. Intents quote (optional JWT)
 
-`POST /intents/quote` with a tiny USDC amount returns a 1Click quote. With `TRUSTLOCK_INTENTS_MODE=dry` the client sends `dry: true` and does not broadcast. With `live`, it executes and writes the transaction hash into the deal record. There is no Intents testnet (HACKATHON.md Q-007).
+The current `/intents/quote` and `/intents/execute` are stubs; they do not
+contact 1Click or broadcast a transaction. Wire quote verification first.
+Only enable live execution after the implementation and safety checks are
+complete. There is no Intents testnet (HACKATHON.md Q-007).
 
 ### 6. Demo video and X post
 
@@ -100,7 +115,11 @@ Follow `docs/demo_script.md`. The public X post must tag **@NEARProtocol** and *
 
 ## Security, in one paragraph
 
-The rider key is a function-call access key whose `method_names` are exactly `["confirm_delivery"]`. The deal agent holds no full-access key and no transfer key. Naira screenshots never release escrow by themselves. Release is `confirm_delivery` or a timeout refund to the original payer. See `docs/threat_model.md`.
+The design requires a function-call rider key limited to
+`["confirm_delivery"]`; the agent must hold no key that can move funds; and
+screenshots alone must not establish naira payment. These are security
+requirements to implement and verify, not a claim that the full end-to-end
+system is already deployed. See [the threat model](docs/threat_model.md).
 
 ## Environment
 

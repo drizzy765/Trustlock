@@ -95,7 +95,7 @@ Read, do not vend:
 
 - ClearSend `contracts/escrow/src/lib.rs` — `#[near]` module layout, status enum, storage reservation, `Promise` + callback, scoped `attest` key (ours is `confirm_delivery`).
 - Penstock — 1Click quote verification, JWT as `X-API-KEY`, demo/dry/live modes, an honest "limits" section.
-- NairaRails — Nigerian real-world framing, short problem-first demo.
+- NairaRails — African real-world framing, short problem-first demo.
 
 Do not copy their code verbatim into this repo. Do not copy their credentials, account names, or JWT.
 
