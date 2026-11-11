@@ -41,7 +41,7 @@ Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and
 | Brayan Sorgho | [@Sorghobrayan-dotcom](https://github.com/Sorghobrayan-dotcom) | Deal agent: multilingual preview (Pidgin, Yoruba, English), refusal to release funds or return keys, deal API endpoints | #2, #4 (stretch #15, #16, #19) |
 | Mikezx8 | [@Mikezx8](https://github.com/Mikezx8) | Security: contract and threat-model review, rider function-call key and its confinement tests, agent safety battery | #3, #6, #7, #21 |
 
-Full role details: [ROLES.md](ROLES.md).
+Full role details: [ROLES.md](ROLES.md). Wallet / testnet account questions: [docs/testnet_accounts.md](docs/testnet_accounts.md).
 
 How we work:
 
