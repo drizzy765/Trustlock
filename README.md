@@ -18,6 +18,8 @@ Sibling project (different hackathon): `micro1-receipt-eval`. NEAR HACKATHON.md 
 
 ## Product target (not a list of completed features)
 
+The confirmed end-to-end product flow (actors, sequence, state machine, built vs planned, security boundary) is in [docs/end_to_end_flow.md](docs/end_to_end_flow.md).
+
 | | ClearSend | TrustLock design target |
 | --- | --- | --- |
 | Release trigger | LLM `attest` on free text | Rider scans a one-time buyer-signed QR |
