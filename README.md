@@ -6,7 +6,7 @@ Pay-on-delivery escrow for African Instagram and WhatsApp commerce. The **dispat
 **Tracks:** `realworld` and `business`  
 **Deadline:** 14 November 2026, 23:59 UTC (15 November 00:59 WAT / 14 November 15:59 America/Los_Angeles)  
 **Judging:** 16–18 November 2026  
-**Built by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Mikezx8** (see [Team and responsibilities](#team-and-responsibilities))
+**Built by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Mikezx8** (see [Team and responsibilities](#team-and-responsibilities) and [ROLES.md](ROLES.md))
 
 The intended flow is that a buyer locks USDC in a NEAR escrow, a seller confirms the deal terms, and a dispatch rider confirms delivery with a one-time buyer-authorized QR. A deadline enables a refund if delivery is not confirmed. The agent is designed to help with terms and deterministic naira-receipt checks, but it must never hold a key that can move funds.
 
@@ -40,6 +40,8 @@ Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and
 | Agoro Oluwatimilehin (Timi) | [@drizzy765](https://github.com/drizzy765) | Escrow contract and unit tests, Next.js `/pay` `/scan` `/dashboard`, testnet wallet, 1Click quotes, testnet end-to-end run, README judge path, demo video, X post and submission | #5, #8, #9, #10, #12, #13 (stretch #11, #14, #17, #18) |
 | Brayan Sorgho | [@Sorghobrayan-dotcom](https://github.com/Sorghobrayan-dotcom) | Deal agent: multilingual preview (Pidgin, Yoruba, English), refusal to release funds or return keys, deal API endpoints | #2, #4 (stretch #15, #16, #19) |
 | Mikezx8 | [@Mikezx8](https://github.com/Mikezx8) | Security: contract and threat-model review, rider function-call key and its confinement tests, agent safety battery | #3, #6, #7, #21 |
+
+Full role details: [ROLES.md](ROLES.md).
 
 How we work:
 
