@@ -1,17 +1,23 @@
-//! near-workspaces sandbox tests.
+//! near-workspaces sandbox tests for TrustLock escrow.
 //!
-//! Enable these once `near-workspaces` is in Cargo.toml and `cargo near` can
-//! produce a WASM blob. Until then they are documentation of the safety battery
-//! in docs/benchmark.md (S01-S09).
-//!
-//! Planned cases:
-//! - rider function-call key can call confirm_delivery and nothing else
-//! - replayed QR hash panics
-//! - double confirm panics
-//! - timeout refund after deadline
-//! - open_dispute freezes payout
+//! Safety battery S01-S09 and additional security scenarios.
+//! Run with: cargo test --test workspaces
 
-#[test]
-fn placeholder_documents_the_sandbox_plan() {
-    assert!(true);
+mod utils;
+
+// Safety battery tests (S01-S09)
+mod spec {
+    mod s01_happy_path;
+    mod s02_double_release;
+    mod s03_replayed_qr;
+    mod s04_timeout_refund;
+    mod s05_early_refund;
+    mod s06_stranger;
+    mod s07_rider_key;
+    mod s08_wrong_amount;
+    mod s09_dispute_freeze;
+    mod s10_buyer_qr_auth;
+    mod s11_payout_failure;
+    mod s12_refund_failure;
+    mod s13_dispute_race;
 }
