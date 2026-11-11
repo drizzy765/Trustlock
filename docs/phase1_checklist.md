@@ -1,6 +1,6 @@
 # Phase 1 Checklist — TrustLock Foundation
 
-**Solo project by:** Agoro Oluwatimilehin (Timi)  
+**Team:** Agoro Oluwatimilehin (Timi), Brayan Sorgho, Mikezx8  
 **Deadline:** Nov 14, 2026, 23:59 UTC  
 **Phase Dates:** Nov 5–7, 2026  
 **Tracks:** `realworld`, `business`
@@ -269,7 +269,7 @@ npm install
 
 ## Notes for Coding Agent
 
-- **This is a SOLO project** — Timi is the only author
+- **Team project**: Timi, Brayan Sorgho and Mikezx8 (see README)
 - **Keep installs minimal** — Laptop is weak, avoid heavy dependencies
 - **Prefer prebuilt binaries** — Use npm/winget over source compilation
 - **Never commit secrets** — `.env` and keys stay local only

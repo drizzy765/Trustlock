@@ -1,6 +1,6 @@
 # Phase 2 Status — TrustLock Contract Development
 
-**Solo project by:** Agoro Oluwatimilehin (Timi)  
+**Team:** Agoro Oluwatimilehin (Timi), Brayan Sorgho, Mikezx8  
 **Phase:** 2 — Contract Development  
 **Status:** ✅ Core Contract Complete (Promise + callback implemented)
 
@@ -182,7 +182,7 @@ cargo build --release --target wasm32-unknown-unknown
 
 ## Notes
 
-- **This is a SOLO project** — Timi is the only author
+- **Team project**: Timi, Brayan Sorgho and Mikezx8 (see README)
 - **Contract is now feature-complete** for core escrow logic
 - **Promise + callback pattern** follows ClearSend pattern
 - **State restoration** on failure prevents stuck funds
