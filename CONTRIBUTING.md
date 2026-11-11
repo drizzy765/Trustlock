@@ -1,6 +1,6 @@
 # Contributing
 
-TrustLock is a solo NEAR HACKATHON project by Agoro Oluwatimilehin (Timi).
+TrustLock is a team project by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Mikezx8 (see README, Team and responsibilities).
 
 1. Read `AGENTS.md` and `docs/architecture.md` before writing code.
 2. Never commit `.env` or a key file.

@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Instructions for the coding agent (opencode / Cursor running Kimi) helping Timi build TrustLock solo on a weak Windows laptop.
+Instructions for the coding agent (opencode / Cursor running Kimi) helping the TrustLock team (Timi, Brayan Sorgho, Mikezx8) build TrustLock.
 
 ## Person
 
 - **Timi** (Agoro Oluwatimilehin) — AI/ML engineer, Lagos. Deal agent, receipt check, demo, X post, submission. Never call him a student.
 
-This is a solo project. Do not invent extra teammates.
+The team is Timi (drizzy765), Brayan Sorgho (Sorghobrayan-dotcom) and Mikezx8. Do not add or remove teammates; owners are listed in the README.
 
 ## Product decisions that are already made
 
