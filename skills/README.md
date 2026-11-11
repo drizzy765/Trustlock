@@ -62,7 +62,7 @@ The URL `https://docs.near.org/protocol/access-keys` redirects to the same acces
 | --- | --- | --- |
 | ClearSend | https://github.com/dukemawex/clearsend-near | Scoped function-call key, README quality. Do not copy LLM-`attest` release |
 | Penstock | https://github.com/ace-coderr/penstock | Real mainnet proof, dry/live labels, quote signatures |
-| NairaRails | https://github.com/Esimuda/nairarails | Nigerian money framing, short problem-first demo |
+| NairaRails | https://github.com/Esimuda/nairarails | African money framing, short problem-first demo |
 
 ## Video / motion (optional)
 

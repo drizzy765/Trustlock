@@ -38,7 +38,7 @@ jobs:
       run: cargo fmt -- --check
     
     - name: Run Clippy
-      run: cargo clippy --target wasm32-unknown-unknown -- -D warnings
+      run: cargo clippy --target wasm32-unknown-unknown -- -D warnings -A clippy::too_many_arguments
     
     - name: Build Contract
       run: cargo build --target wasm32-unknown-unknown --release

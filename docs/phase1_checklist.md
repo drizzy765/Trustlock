@@ -110,7 +110,7 @@
 ### Patterns Extracted:
 
 **README Structure:**
-1. **Problem statement first** — Nigerian freelancers get USDC, pay bills in naira
+1. **Problem statement first** — African freelancers get USDC, pay bills in local currency
 2. **Why NEAR** — Clear value proposition (Intents, atomic settle-or-refund)
 3. **Run instructions** — Simple copy-paste commands
 4. **Demo script** — Timed walkthrough (75s)
