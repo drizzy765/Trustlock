@@ -24,7 +24,7 @@ On screen: an Instagram DM. A buyer sends a transfer screenshot. A seller in Lag
 
 Say:
 
-> In Lagos, Instagram sellers lose goods to fake transfer screenshots. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery.
+> Across Africa, sellers on Instagram, WhatsApp, Telegram and other chat apps lose goods to fake transfer screenshots. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery.
 
 ## 0:12–0:28 — The lock (only after the testnet gate)
 

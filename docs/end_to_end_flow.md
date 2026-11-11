@@ -17,7 +17,7 @@
 | **Seller** (any business) | Connects a wallet, adds business info, picks an agent, creates payment links and shares them in any chat | Take the buyer's money before proof of delivery |
 | **Buyer** | Clicks the link, reviews the deal, pays into escrow, confirms receipt with one tap | Get goods and claw the money back after confirming |
 | **Agent** (built-in TrustLock agent, or the seller's own model: Claude, ChatGPT, Gemini, others) | Reads the deal and contract state, checks order and delivery evidence, answers questions in the buyer's language, recommends release, prepares an *unsigned* transaction | **Move, release or refund funds.** It holds no key that can |
-| **Rider** (optional) | Scans the buyer's one-time QR at the door | Release funds without the buyer's QR, reuse a QR, or call anything except `confirm_delivery` (function-call key) |
+| **Rider** (optional) | Scans the buyer's one-time QR at handover | Release funds without the buyer's QR, reuse a QR, or call anything except `confirm_delivery` (function-call key) |
 | **Escrow contract** (NEAR, Rust) | Holds USDC and releases or refunds only on hard proof or the deadline | Be talked into anything. It only checks signatures, hashes and time |
 | **TrustLock operator** (owner account) | Resolves disputes by hand in v1 | Release funds outside the dispute path (planned constraint) |
 
@@ -67,7 +67,7 @@ sequenceDiagram
     alt Buyer confirms (planned)
         Buyer->>Contract: confirm_receipt(deal_id) signed by buyer wallet
     else Rider scans QR (built)
-        Buyer->>Rider: Shows one-time QR at the door
+        Buyer->>Rider: Shows one-time QR at handover
         Rider->>Contract: confirm_delivery(deal_id, qr_preimage) via function-call key
     end
     Contract->>Seller: ft_transfer USDC → Released
