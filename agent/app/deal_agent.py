@@ -1,8 +1,15 @@
 """Extract unsigned deal terms from Pidgin, Yoruba or English text.
 
-This stub is deterministic so the README path works without Muse keys.
-Replace `preview_terms` with a Muse tool-calling path when Timi adds keys.
-Never return, log or persist a private key.
+This is deterministic so the README path works without model keys. Replace the parsing with a
+model tool-calling path later if wanted, but keep two rules:
+
+* the message goes through ``guard.screen`` first, and a refusal carries no terms at all;
+* nothing here pays, refunds or confirms anything, and nothing here ever returns, logs or
+  persists a private key.
+
+Yoruba and Pidgin are matched on accent-free text, and the item keeps the buyer's own spelling
+(accents included). Where the text is ambiguous the result says so in ``warning`` instead of
+guessing.
 """
 
 from __future__ import annotations
@@ -10,50 +17,218 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_AMOUNT = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)(?P<k>k5|k)?|(?P<word>2k5|2\.5k)",
-    re.I,
-)
+from .guard import normalise, refusal_message, screen
+
+LANGUAGES = ("pcm", "yo", "en")
+
+_PIDGIN_WORDS = {
+    "abeg", "wetin", "dey", "wey", "una", "oga", "jare", "sef", "comot", "sabi", "pikin", "wahala",
+}  # fmt: skip
+_YORUBA_WORDS = {"jowo", "egberun", "owo", "loni"}
+_YORUBA_PHRASES = ("mo fe", "ni ola", "e gbe")
+
+# Yoruba number words after "egberun" (thousand): egberun marun = 5,000.
+_YORUBA_NUMBERS = {
+    "kan": 1, "meji": 2, "meta": 3, "merin": 4, "marun": 5,
+    "mefa": 6, "meje": 7, "mejo": 8, "mesan": 9, "mewa": 10,
+}  # fmt: skip
+
+DEFAULT_DEADLINE_HOURS = 48
+NEXT_DAY_HOURS = 24
+
+
+def detect_language(text: str) -> str:
+    """Return "pcm", "yo" or "en". Yoruba-only letters (ẹ ọ ṣ) win, then Pidgin, then Yoruba."""
+    if any(ch in text.lower() for ch in "ẹọṣ"):
+        return "yo"
+    folded = normalise(text)
+    words = set(re.findall(r"[a-z0-9]+", folded))
+    if words & _PIDGIN_WORDS or "no vex" in folded:
+        return "pcm"
+    spaced = " ".join(re.findall(r"[a-z0-9]+", folded))
+    if words & _YORUBA_WORDS or any(phrase in spaced for phrase in _YORUBA_PHRASES):
+        return "yo"
+    return "en"
+
+
+# --- amounts ------------------------------------------------------------------------------------
+
+_NUMBER_WORD = "|".join(_YORUBA_NUMBERS)
+MIN_PLAUSIBLE_NGN = 100  # "naira 2 days" is a delay, not a price
+_AMOUNT_TIERS: list[tuple[int, re.Pattern[str]]] = [
+    # explicit currency: ₦3,500 / NGN 3500 / n3500 / naira 2k5
+    (
+        0,
+        re.compile(
+            r"(?:₦|ngn|naira|(?<![a-z0-9])n)\s*(\d+(?:\.\d+)?)(?:\s?(k)(\d+)?)?(?![a-z0-9])"
+        ),
+    ),
+    # k notation: 2k5, 2.5k, 10k
+    (1, re.compile(r"(?<![a-z0-9.])(\d+(?:\.\d+)?)(k)(\d+)?(?![a-z0-9])")),
+    # 4500 naira
+    (2, re.compile(r"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*(?:naira|ngn)\b")),
+    # Yoruba number words: egberun marun = 5,000
+    (3, re.compile(rf"\begberun\s+({_NUMBER_WORD})\b")),
+    # a bare number of three to nine digits
+    (4, re.compile(r"(?<![a-z0-9.])(\d{3,9})(?![a-z0-9])")),
+]
+
+
+def _value(tier: int, match: re.Match[str]) -> int:
+    """The naira amount of one match. "2k5", "2.5k" and "2500" all mean 2,500."""
+    whole = match.group(1)
+    if tier == 3:
+        return _YORUBA_NUMBERS[whole] * 1000
+    if tier in (0, 1) and match.group(2) == "k":
+        fraction = match.group(3)
+        return round(float(f"{whole}.{fraction}" if fraction else whole) * 1000)
+    return round(float(whole))
+
+
+def _amounts(text: str) -> list[tuple[int, int, int]]:
+    """Every (tier, position, naira) found, best evidence first within the same position."""
+    folded = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", normalise(text))
+    found = []
+    for tier, pattern in _AMOUNT_TIERS:
+        for match in pattern.finditer(folded):
+            amount = _value(tier, match)
+            if amount >= MIN_PLAUSIBLE_NGN:
+                found.append((tier, match.start(), amount))
+    return found
 
 
 def parse_amount_ngn(text: str) -> int | None:
-    raw = text.lower().replace(",", "")
-    if "2k5" in raw or "2.5k" in raw:
-        return 2500
-    m = re.search(r"(\d+(?:\.\d+)?)\s*k\b", raw)
-    if m:
-        return int(float(m.group(1)) * 1000)
-    m = re.search(r"(?:ngn|naira|₦)\s*(\d+(?:\.\d+)?)", raw)
-    if m:
-        return int(float(m.group(1)))
-    m = re.search(r"\b(\d{3,7})\b", raw)
-    if m:
-        return int(m.group(1))
-    return None
+    """The price in naira: an explicit currency or "k" amount first, a bare number last."""
+    found = _amounts(text)
+    if not found:
+        return None
+    tier, _, amount = min(found, key=lambda f: (f[0], f[1]))
+    return amount
+
+
+def _distinct_amounts(text: str) -> list[int]:
+    """The different amounts in order of appearance."""
+    ordered = sorted(_amounts(text), key=lambda f: f[1])
+    seen: list[int] = []
+    for _, _, amount in ordered:
+        if amount not in seen:
+            seen.append(amount)
+    return seen
+
+
+# --- deadline -----------------------------------------------------------------------------------
+
+
+def parse_deadline_hours(text: str) -> int:
+    """24 for tomorrow or today, N x 24 for "N days", otherwise the 48 hour default."""
+    spaced = " ".join(re.findall(r"[a-z0-9]+", normalise(text)))
+    days = re.search(r"\b(\d{1,2}) (?:days?|ojo)\b", spaced)
+    if days:
+        return int(days.group(1)) * 24
+    if re.search(r"\b(?:tomorrow|tmrw|2moro|today|tonight|loni)\b|\bni (?:ola|oni)\b", spaced):
+        return NEXT_DAY_HOURS
+    return DEFAULT_DEADLINE_HOURS
+
+
+# --- item ---------------------------------------------------------------------------------------
+
+_DROP_PHRASES = sorted(
+    [
+        # English
+        ("i", "want", "to", "buy"), ("i", "would", "like", "to", "buy"),
+        ("id", "like", "to", "buy"),
+        ("i", "want"), ("i", "would", "like"), ("can", "you", "hold"), ("could", "you", "hold"),
+        ("please",), ("kindly",), ("hold",), ("reserve",), ("book",), ("deliver", "tomorrow"),
+        ("delivered", "tomorrow"), ("deliver", "today"), ("for", "delivery"), ("deliver",),
+        ("tomorrow",), ("today",), ("tonight",), ("tmrw",), ("for", "the"), ("for",), ("the",),
+        ("a",), ("an",),
+        # Pidgin
+        ("abeg", "hold"), ("abeg",), ("make", "i"), ("i", "wan", "buy"), ("i", "wan"), ("oga",),
+        ("di",),
+        # Yoruba
+        ("e", "jowo"), ("jowo",), ("mo", "fe", "ra"), ("mo", "fe"), ("e", "gbe", "e", "wa"),
+        ("e", "gbe", "wa"), ("ni", "ola"), ("ni",),
+    ],
+    key=len,
+    reverse=True,
+)  # fmt: skip
+_PRICE_TOKEN = re.compile(r"^(?:₦|ngn|n)?\d[\d,]*(?:\.\d+)?(?:k\d*)?$")
+_CURRENCY_TOKENS = {"₦", "ngn", "naira"}
+_EDGE_PUNCTUATION = ".,;:!?()\"'"
+
+
+def extract_item(text: str) -> str:
+    """The item, in the buyer's own spelling, without price, delivery and filler words."""
+    original = [t.strip(_EDGE_PUNCTUATION) for t in text.split()]
+    original = [t for t in original if t]
+    norm = [normalise(t) for t in original]
+    kept: list[str] = []
+    i = 0
+    while i < len(norm):
+        phrase = next((p for p in _DROP_PHRASES if tuple(norm[i : i + len(p)]) == p), None)
+        if phrase:
+            i += len(phrase)
+            continue
+        token = norm[i]
+        if token == "egberun":
+            i += 1
+            word = re.sub(r"\W", "", norm[i]) if i < len(norm) else ""
+            if word in _YORUBA_NUMBERS or word.removesuffix("un") in _YORUBA_NUMBERS:
+                i += 1  # "marun" or "marun-un"
+            continue
+        in_days = (
+            token in ("in", "within")
+            and i + 2 < len(norm)
+            and norm[i + 1].isdigit()
+            and norm[i + 2] in ("day", "days")
+        )
+        if in_days:
+            i += 3
+            continue
+        if token.isdigit() and i + 1 < len(norm) and norm[i + 1] in ("day", "days", "ojo"):
+            i += 2
+            continue
+        if _PRICE_TOKEN.match(token) or token in _CURRENCY_TOKENS:
+            i += 1
+            continue
+        kept.append(original[i])
+        i += 1
+    return " ".join(kept).strip(" ,.") or "item"
+
+
+# --- the preview --------------------------------------------------------------------------------
 
 
 def preview_terms(text: str, language_hint: str | None = None) -> dict[str, Any]:
-    lowered = text.lower()
-    language = language_hint or (
-        "pcm"
-        if any(w in lowered for w in ("abeg", "wetin", "no vex", "i dey"))
-        else "yo"
-        if any(w in lowered for w in ("ẹ", "jowo", "owo"))
-        else "en"
-    )
+    """Unsigned deal terms, or a refusal with no terms if the message tries to move money.
+
+    A refusal is ``{"refused": True, "code", "reason", "language", "message"}``: it never repeats
+    the user's text and never contains a key. Terms are ``{item, price_ngn, currency,
+    deadline_hours, language, notes, warning}`` and are never signed.
+    """
+    language = language_hint if language_hint in LANGUAGES else detect_language(text)
+    refusal = screen(text)
+    if refusal is not None:
+        return {
+            "refused": True,
+            "code": refusal.code,
+            "reason": refusal.reason,
+            "language": language,
+            "message": refusal_message(refusal, language),
+        }
+    amounts = _distinct_amounts(text)
     price = parse_amount_ngn(text)
-    item = text
-    for noise in ("abeg hold", "abeg", "for the", "deliver tomorrow", "please"):
-        item = re.sub(noise, " ", item, flags=re.I)
-    item = re.sub(r"\b(\d+(?:\.\d+)?k5?|2k5|ngn|₦)\b", " ", item, flags=re.I)
-    item = " ".join(item.split()).strip(" ,.") or "item"
-    deadline_hours = 24 if "tomorrow" in lowered or "deliver" in lowered else 48
+    warning = None
+    if price is None:
+        warning = "No price found: confirm the amount with the buyer."
+    elif len(amounts) > 1:
+        warning = f"More than one amount found ({', '.join(map(str, amounts))}): confirm the price."
     return {
-        "item": item,
+        "item": extract_item(text),
         "price_ngn": price,
         "currency": "NGN",
-        "deadline_hours": deadline_hours,
+        "deadline_hours": parse_deadline_hours(text),
         "language": language,
         "notes": [],
-        "warning": None,
+        "warning": warning,
     }
