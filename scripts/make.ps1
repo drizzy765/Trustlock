@@ -1,6 +1,6 @@
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("help", "agent-install", "agent-dev", "web-install", "web-dev", "contract-test", "agent-smoke")]
+  [ValidateSet("help", "agent-install", "agent-dev", "web-install", "web-dev", "contract-test", "agent-smoke", "contract-build", "contract-deploy")]
   [string]$Target = "help"
 )
 
@@ -47,7 +47,28 @@ switch ($Target) {
       cargo check --target wasm32-unknown-unknown
     }
   }
+  "contract-build" {
+    Set-Location "$Root"
+    $cargoPath = "$env:USERPROFILE\.cargo\bin\cargo.exe"
+    if (Test-Path $cargoPath) {
+      & $cargoPath build --release --target wasm32-unknown-unknown --manifest-path contract\Cargo.toml
+    } else {
+      cargo build --release --target wasm32-unknown-unknown --manifest-path contract\Cargo.toml
+    }
+    Write-Host "WASM output: $Root\target\wasm32-unknown-unknown\release\trustlock.wasm"
+  }
+  "contract-deploy" {
+    Set-Location "$Root"
+    Write-Host "Contract WASM: $Root\target\wasm32-unknown-unknown\release\trustlock.wasm"
+    Write-Host ""
+    Write-Host "To deploy, run these commands:"
+    Write-Host "  near create-account trustlock-YOURNAME.testnet --masterAccount YOURNAME.testnet --initialBalance 10"
+    Write-Host "  near deploy trustlock-YOURNAME.testnet target\wasm32-unknown-unknown\release\trustlock.wasm"
+    Write-Host "  near call trustlock-YOURNAME.testnet new '{`"usdc`":`"usdc.fakes.testnet`"}' --accountId trustlock-YOURNAME.testnet"
+    Write-Host ""
+    Write-Host "Update .env with your deployed contract ID!"
+  }
   default {
-    Write-Host "Targets: agent-install, agent-dev, agent-smoke, web-install, web-dev, contract-test, contract-check"
+    Write-Host "Targets: agent-install, agent-dev, agent-smoke, web-install, web-dev, contract-test, contract-check, contract-build, contract-deploy"
   }
 }
