@@ -38,7 +38,7 @@ Response:
 
 Must not include a private key, seed phrase, or access-key secret.
 
-Request limits: `text` is 1 to 2000 characters; `language_hint` is `"pcm"`, `"yo"` or `"en"` (anything else is a 422). It wins over detection. Without a hint the language is detected: Yoruba letters (ẹ, ọ, ṣ) first, then Pidgin words, then Yoruba words, otherwise English.
+Request limits: `text` is 1 to 2000 characters; `language_hint` is `"pcm"`, `"yo"` or `"en"` (anything else is a 400 `ERR_INVALID_INPUT`, see Errors). It wins over detection. Without a hint the language is detected: Yoruba letters (ẹ, ọ, ṣ) first, then Pidgin words, then Yoruba words, otherwise English.
 
 How the terms are read:
 
@@ -67,11 +67,63 @@ What the screen is and is not: a deterministic heuristic (`agent/app/guard.py`),
 
 ## `POST /deals/draft`
 
-Persist a draft the seller wallet will submit as `create_deal`.
+Store an unsigned draft that the seller wallet will submit as `create_deal`. The draft lives in
+the agent's memory (lost on restart) until persistent storage lands.
+
+Request:
+
+```json
+{
+  "seller_id": "seller-timi.testnet",
+  "buyer_id": "buyer-ada.testnet",
+  "rider_id": "rider-timi.testnet",
+  "item": "black sandal",
+  "price_ngn": 2500,
+  "deadline_hours": 24,
+  "qr_hash": "<64 hex characters: sha256 of the buyer's one-time QR secret>"
+}
+```
+
+`rider_id` and `qr_hash` are optional. Account ids must be NEAR account ids, `price_ngn` is a
+positive integer, `deadline_hours` is 1 to 720. Unknown fields are rejected with a 400, so a key,
+seed phrase or `qr_preimage` sent by mistake is never stored. The agent never generates or keeps
+the QR preimage: the buyer side makes it and sends only the hash.
+
+Response: the stored draft, with `deal_id` (the agent's draft id, not the contract's),
+`status: "draft"`, `onchain_deal_id: null`, `funding_tx: null`, `intents_quote: null` and
+`created_at` (UTC).
+
+## `POST /deals/{deal_id}/onchain`
+
+After the seller wallet has called `create_deal`, record the id the contract returned:
+`{"onchain_deal_id": 7}`. The agent first calls the contract's `get_deal` view and records the id
+only if that deal exists and has the draft's seller, buyer (and rider, when the draft has one).
+It is a read-only check: the agent signs nothing. Then `status` becomes `"submitted"`.
+
+Errors: 404 `ERR_DEAL_NOT_FOUND`; 409 `ERR_NO_CONTRACT` (no `TRUSTLOCK_CONTRACT_ID`),
+`ERR_ALREADY_LINKED`, `ERR_ONCHAIN_NOT_FOUND`, `ERR_ONCHAIN_MISMATCH`; 502 `ERR_RPC`.
 
 ## `GET /deals/{deal_id}`
 
-Proxy of the on-chain deal plus local receipt / intents metadata.
+The draft plus the on-chain deal and local receipt / Intents metadata:
+
+```json
+{
+  "deal_id": 1, "status": "submitted", "onchain_deal_id": 7, "...": "draft fields",
+  "contract_id": "trustlock-timi.testnet",
+  "onchain_status": "found",
+  "onchain": {"seller": "...", "rider": "...", "buyer": "...", "payer": null, "item": "...",
+              "price": "2500000", "deadline_ms": 1900000000000, "status": "Created",
+              "qr_consumed": false},
+  "agent_metadata": {"receipt_status": null, "intents_quote": null}
+}
+```
+
+`onchain_status` is `no_contract` (no `TRUSTLOCK_CONTRACT_ID`, nothing called), `not_submitted`
+(no on-chain id recorded, nothing called), `found` (live `get_deal` result in `onchain`) or
+`missing` (the contract no longer returns that deal). `onchain` is `null` unless `found`; the agent
+never invents an on-chain id or state. The RPC is `NEAR_NODE_URL`, else the public RPC of
+`NEAR_NETWORK`. An RPC failure is a 502 `ERR_RPC`; an unknown `deal_id` is a 404.
 
 ## `POST /receipts/check`
 
@@ -99,4 +151,7 @@ Rejected unless mode is `live`. Writes the deposit hash onto the draft. Amounts 
 
 ## Errors
 
-Use HTTP 400 for user mistakes, 409 for illegal deal transitions the agent already knows about, 502 for RPC/1Click failures. Body: `{"error": "ERR_CODE", "message": "..."}`.
+Use HTTP 400 for user mistakes, 404 for an unknown draft id, 409 for illegal deal transitions the agent already knows about, 502 for RPC/1Click failures. Body: `{"error": "ERR_CODE", "message": "..."}`.
+
+Every request that fails validation (missing, malformed or unknown fields) is a 400
+`ERR_INVALID_INPUT` whose message names the fields but never repeats the values sent.

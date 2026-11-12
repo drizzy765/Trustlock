@@ -88,10 +88,16 @@ def test_the_agent_still_cannot_move_money():
 
 
 def test_the_input_is_bounded_and_the_hint_is_restricted():
-    assert client.post("/deals/preview", json={"text": "x" * 2001}).status_code == 422
-    assert client.post("/deals/preview", json={"text": ""}).status_code == 422
+    assert client.post("/deals/preview", json={"text": "x" * 2001}).status_code == 400
+    assert client.post("/deals/preview", json={"text": ""}).status_code == 400
     bad_hint = {"text": "hold 2k5 sandal", "language_hint": "ed25519:evil"}
-    assert client.post("/deals/preview", json=bad_hint).status_code == 422
+    assert client.post("/deals/preview", json=bad_hint).status_code == 400
+    # CodeRabbit on #34: a rejected value (here a pasted key) must not come back in the error.
+    rejected = client.post("/deals/preview", json={"text": "hold 2k5", "language_hint": SECRET})
+    assert rejected.status_code == 400 and rejected.json()["error"] == "ERR_INVALID_INPUT"
+    assert SECRET not in rejected.text and "ed25519" not in rejected.text
+    long_text = client.post("/deals/preview", json={"text": "ed25519:" + "x" * 2100})
+    assert long_text.status_code == 400 and "xxxx" not in long_text.text
     ok = client.post("/deals/preview", json={"text": "hold 2k5 sandal", "language_hint": "yo"})
     assert ok.status_code == 200 and ok.json()["language"] == "yo"
     assert json.loads(ok.text)["price_ngn"] == 2500
