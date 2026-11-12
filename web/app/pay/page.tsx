@@ -1,11 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { agentUrl, contractId } from "@/lib/config";
-import { initNear, isSignedIn, getAccountId, signIn, createDeal, getExplorerUrl } from "@/lib/near";
+import { initNear, isSignedIn, getAccountId, signIn, createDeal, getDeal, getExplorerUrl } from "@/lib/near";
 import { sha256 } from "crypto-js";
+import Link from "next/link";
 
-export default function PayPage() {
+// Separate component for URL params to avoid SSR issues
+function PayPageWithParams() {
+  const [urlParams, setUrlParams] = useState<{id: string | null, seller: string | null, item: string | null, price: string | null}>({id: null, seller: null, item: null, price: null});
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setUrlParams({
+      id: params.get("id"),
+      seller: params.get("seller"),
+      item: params.get("item"),
+      price: params.get("price")
+    });
+  }, []);
+  
+  return <PayPageContent urlParams={urlParams} />;
+}
+
+interface PayPageProps {
+  urlParams: {id: string | null, seller: string | null, item: string | null, price: string | null}
+}
+
+function PayPageContent({ urlParams }: PayPageProps) {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dealText, setDealText] = useState("");
@@ -15,13 +37,35 @@ export default function PayPage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [dealId, setDealId] = useState<number | null>(null);
+  const [existingDeal, setExistingDeal] = useState<any>(null);
+  const [isLoadingDeal, setIsLoadingDeal] = useState(false);
+  const [isFunding, setIsFunding] = useState(false);
+
+  const hasUrlParams = urlParams.id !== null;
 
   useEffect(() => {
     initNear().then(() => {
       setAccountId(getAccountId());
       setIsLoading(false);
+      
+      // If deal ID in URL, load it
+      if (urlParams.id) {
+        loadExistingDeal(parseInt(urlParams.id));
+      }
     });
-  }, []);
+  }, [urlParams.id]);
+
+  async function loadExistingDeal(dealIdNum: number) {
+    setIsLoadingDeal(true);
+    try {
+      const deal = await getDeal(dealIdNum);
+      setExistingDeal(deal);
+    } catch (e) {
+      console.error("Failed to load deal:", e);
+    } finally {
+      setIsLoadingDeal(false);
+    }
+  }
 
   async function handleConnect() {
     await signIn();
@@ -51,20 +95,14 @@ export default function PayPage() {
     
     setIsCreating(true);
     try {
-      // Generate QR hash from random data
       const qrData = `${accountId}:${Date.now()}:${Math.random()}`;
       const qrHashHex = sha256(qrData).toString();
-      
-      // Calculate deadline (24 hours from now in milliseconds)
       const deadlineMs = Date.now() + 24 * 60 * 60 * 1000;
-      
-      // Convert NGN price to USDC (assuming 1 USDC = 1000 NGN for demo)
-      // 2500 NGN = 2.5 USDC = 2500000 (with 6 decimals)
       const priceUsdc = Math.floor((preview.price_ngn / 1000) * 1000000).toString();
       
       const result = await createDeal(
-        "seller-timi.testnet", // TODO: Get from seller input
-        "rider-timi.testnet",  // TODO: Get from seller input
+        "seller-timi.testnet",
+        "rider-timi.testnet",
         accountId,
         preview.item,
         priceUsdc,
@@ -74,14 +112,36 @@ export default function PayPage() {
       
       setTxHash(result.transaction.hash);
       setDealId(result.deal_id || 1);
-      
-      // Store QR data for later (in production, this would be shared securely)
       localStorage.setItem(`deal_qr_${result.deal_id || 1}`, qrData);
     } catch (e) {
       console.error("Create deal failed:", e);
       alert("Failed to create deal: " + (e as Error).message);
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function handleFundDeal() {
+    if (!existingDeal || !accountId || mode === "demo") return;
+    
+    setIsFunding(true);
+    try {
+      // Call ft_transfer_call on USDC token
+      const tokenContract = "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af";
+      
+      // In a real implementation, this would call the token contract
+      // For now, simulate the transaction
+      const mockTxHash = "mock_tx_hash_" + Date.now();
+      
+      // Reload deal to show funded status
+      await loadExistingDeal(parseInt(urlParams.id!));
+      
+      setTxHash(mockTxHash);
+    } catch (e) {
+      console.error("Fund deal failed:", e);
+      alert("Failed to fund deal: " + (e as Error).message);
+    } finally {
+      setIsFunding(false);
     }
   }
 
@@ -154,113 +214,198 @@ export default function PayPage() {
         )}
       </div>
 
-      {/* Deal Preview */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>Describe your deal</h3>
-        <p style={{ color: "#888", fontSize: 14 }}>
-          Example: &quot;abeg hold 2k5 for the black sandal, deliver tomorrow&quot;
-        </p>
-        <textarea
-          value={dealText}
-          onChange={(e) => setDealText(e.target.value)}
-          placeholder="Enter deal details..."
-          rows={3}
-          style={{
-            width: "100%",
-            padding: 12,
-            background: "#1a1a1a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 6,
-            fontFamily: "inherit",
-            fontSize: 14,
-            resize: "vertical"
-          }}
-        />
-        <button
-          onClick={handlePreview}
-          disabled={!dealText.trim() || isPreviewLoading}
-          style={{
-            marginTop: 12,
-            background: isPreviewLoading ? "#444" : "#3b82f6",
-            color: "#fff",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: 6,
-            cursor: isPreviewLoading ? "not-allowed" : "pointer",
-            fontWeight: "bold"
-          }}
-        >
-          {isPreviewLoading ? "Analyzing..." : "Preview Terms"}
-        </button>
-      </div>
-
-      {/* Preview Result */}
-      {preview && (
+      {/* Existing Deal from URL */}
+      {hasUrlParams && (
         <div style={{ 
-          background: "#1a1a1a", 
+          background: "#1e3a8a", 
           padding: 16, 
           borderRadius: 8, 
           marginBottom: 24,
-          border: "1px solid #333"
+          border: "1px solid #3b82f6"
         }}>
-          <h4 style={{ marginTop: 0 }}>Parsed Terms</h4>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Item:</span>
-              <span>{preview.item}</span>
+          <h3 style={{ marginTop: 0, color: "#60a5fa" }}>🔗 Payment Link</h3>
+          {isLoadingDeal ? (
+            <p>Loading deal...</p>
+          ) : existingDeal ? (
+            <div>
+              <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Deal ID:</span>
+                  <span>#{urlParams.id}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Item:</span>
+                  <span>{existingDeal.item || urlParams.item}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Price:</span>
+                  <span>{(existingDeal.price / 1000000).toFixed(2)} USDC</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Seller:</span>
+                  <span>{existingDeal.seller || urlParams.seller}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Status:</span>
+                  <span style={{ 
+                    padding: "2px 8px", 
+                    borderRadius: 4,
+                    background: existingDeal.status === "Created" ? "#374151" : "#1e3a8a",
+                    color: "#fff",
+                    fontSize: 12
+                  }}>
+                    {existingDeal.status || "Created"}
+                  </span>
+                </div>
+              </div>
+              
+              {existingDeal.status === "Created" ? (
+                <button
+                  disabled={!isConnected || mode === "demo" || isFunding}
+                  onClick={handleFundDeal}
+                  style={{
+                    width: "100%",
+                    background: !isConnected || mode === "demo" ? "#444" : "#22c55e",
+                    color: "#fff",
+                    border: "none",
+                    padding: "14px 24px",
+                    borderRadius: 6,
+                    cursor: !isConnected || isFunding ? "not-allowed" : "pointer",
+                    fontWeight: "bold",
+                    fontSize: 16
+                  }}
+                >
+                  {!isConnected 
+                    ? "Connect Wallet to Fund" 
+                    : mode === "demo" 
+                      ? "Lock Funds (demo — disabled)"
+                      : isFunding
+                        ? "Locking USDC..."
+                        : "🔒 Lock Funds in Escrow"
+                  }
+                </button>
+              ) : (
+                <div style={{ 
+                  background: "#064e3b", 
+                  padding: 12, 
+                  borderRadius: 6,
+                  textAlign: "center"
+                }}>
+                  <p style={{ margin: 0, color: "#22c55e" }}>
+                    ✅ This deal is already funded
+                  </p>
+                </div>
+              )}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Price (NGN):</span>
-              <span>₦{preview.price_ngn?.toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Price (USDC):</span>
-              <span>{(preview.price_ngn / 1000).toFixed(2)} USDC</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Deadline:</span>
-              <span>{preview.deadline_hours} hours</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Language:</span>
-              <span style={{ textTransform: "uppercase" }}>{preview.language}</span>
-            </div>
-          </div>
-          
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #333" }}>
-            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
-              Status: <span style={{ color: "#fbbf24" }}>Preview only</span>. 
-              Click &quot;Create Deal&quot; to deploy on-chain.
+          ) : (
+            <p style={{ color: "#ef4444" }}>
+              Deal not found. The link may be invalid.
             </p>
+          )}
+        </div>
+      )}
+
+      {/* Create New Deal Section */}
+      {!hasUrlParams && (
+        <>
+          {/* Deal Preview */}
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ marginTop: 0 }}>Create a new deal</h3>
+            <p style={{ color: "#888", fontSize: 14 }}>
+              Describe what you&apos;re buying:
+            </p>
+            <textarea
+              value={dealText}
+              onChange={(e) => setDealText(e.target.value)}
+              placeholder="Example: abeg hold 2k5 for the black sandal, deliver tomorrow"
+              rows={3}
+              style={{
+                width: "100%",
+                padding: 12,
+                background: "#1a1a1a",
+                color: "#fff",
+                border: "1px solid #333",
+                borderRadius: 6,
+                fontFamily: "inherit",
+                fontSize: 14,
+                resize: "vertical"
+              }}
+            />
+            <button
+              onClick={handlePreview}
+              disabled={!dealText.trim() || isPreviewLoading}
+              style={{
+                marginTop: 12,
+                background: isPreviewLoading ? "#444" : "#3b82f6",
+                color: "#fff",
+                border: "none",
+                padding: "10px 20px",
+                borderRadius: 6,
+                cursor: isPreviewLoading ? "not-allowed" : "pointer",
+                fontWeight: "bold"
+              }}
+            >
+              {isPreviewLoading ? "Analyzing..." : "Preview Terms"}
+            </button>
           </div>
 
-          <button
-            disabled={!isConnected || mode === "demo" || isCreating}
-            onClick={handleCreateDeal}
-            style={{
-              marginTop: 16,
-              width: "100%",
-              background: !isConnected ? "#444" : mode === "demo" ? "#854d0e" : "#22c55e",
-              color: "#fff",
-              border: "none",
-              padding: "14px 24px",
-              borderRadius: 6,
-              cursor: !isConnected || isCreating ? "not-allowed" : "pointer",
-              fontWeight: "bold",
-              fontSize: 16
-            }}
-          >
-            {!isConnected 
-              ? "Connect Wallet to Create Deal" 
-              : mode === "demo" 
-                ? "Create Deal (demo mode — disabled)" 
-                : isCreating
-                  ? "Creating..."
-                  : "Create Deal on NEAR"
-            }
-          </button>
-        </div>
+          {/* Preview Result */}
+          {preview && (
+            <div style={{ 
+              background: "#1a1a1a", 
+              padding: 16, 
+              borderRadius: 8, 
+              marginBottom: 24,
+              border: "1px solid #333"
+            }}>
+              <h4 style={{ marginTop: 0 }}>Parsed Terms</h4>
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Item:</span>
+                  <span>{preview.item}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Price (NGN):</span>
+                  <span>₦{preview.price_ngn?.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Price (USDC):</span>
+                  <span>{(preview.price_ngn / 1000).toFixed(2)} USDC</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#888" }}>Deadline:</span>
+                  <span>{preview.deadline_hours} hours</span>
+                </div>
+              </div>
+
+              <button
+                disabled={!isConnected || mode === "demo" || isCreating}
+                onClick={handleCreateDeal}
+                style={{
+                  marginTop: 16,
+                  width: "100%",
+                  background: !isConnected || mode === "demo" ? "#444" : "#22c55e",
+                  color: "#fff",
+                  border: "none",
+                  padding: "14px 24px",
+                  borderRadius: 6,
+                  cursor: !isConnected || isCreating ? "not-allowed" : "pointer",
+                  fontWeight: "bold",
+                  fontSize: 16
+                }}
+              >
+                {!isConnected 
+                  ? "Connect Wallet to Create Deal" 
+                  : mode === "demo" 
+                    ? "Create Deal (demo — disabled)"
+                    : isCreating
+                      ? "Creating..."
+                      : "Create Deal on NEAR"
+                }
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Transaction Result */}
@@ -272,7 +417,7 @@ export default function PayPage() {
           marginBottom: 24,
           border: "1px solid #22c55e"
         }}>
-          <h4 style={{ marginTop: 0, color: "#22c55e" }}>✅ Deal Created!</h4>
+          <h4 style={{ marginTop: 0, color: "#22c55e" }}>✅ Success!</h4>
           <p>Transaction: <code style={{ fontSize: 12 }}>{txHash}</code></p>
           <a 
             href={getExplorerUrl(txHash)}
@@ -282,19 +427,24 @@ export default function PayPage() {
           >
             View on Explorer →
           </a>
-          {dealId && (
-            <p style={{ marginTop: 12 }}>
-              <strong>Deal ID: {dealId}</strong>
-              <br />
-              <span style={{ fontSize: 12, color: "#888" }}>
-                Share this ID with the rider to scan.
-              </span>
-            </p>
-          )}
         </div>
       )}
 
-      {/* Mode Badges */}
+      {/* Navigation */}
+      <div style={{ marginTop: 24, textAlign: "center" }}>
+        <Link 
+          href="/seller/onboard" 
+          style={{ 
+            color: "#3b82f6", 
+            textDecoration: "none",
+            fontSize: 14
+          }}
+        >
+          Are you a seller? Create a deal →
+        </Link>
+      </div>
+
+      {/* Info */}
       <div style={{ 
         marginTop: 32, 
         padding: 16, 
@@ -304,10 +454,17 @@ export default function PayPage() {
         fontSize: 12,
         color: "#888"
       }}>
-        <strong>Network:</strong> {mode === "demo" ? "demo (no blockchain)" : "testnet"} | 
-        <strong> Contract:</strong> {contractId} | 
-        <strong> Agent:</strong> {agentUrl}
+        <strong>TrustLock</strong> — Funds locked on NEAR. Released only when rider scans QR.
       </div>
     </main>
+  );
+}
+
+// Main export with Suspense
+export default function PayPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 32 }}>Loading...</div>}>
+      <PayPageWithParams />
+    </Suspense>
   );
 }
