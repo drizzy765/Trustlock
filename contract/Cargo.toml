@@ -11,6 +11,14 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = { version = "5.5", features = ["unit-testing"] }
 
+# Note: near-workspaces integration tests are in tests/workspaces.rs.disabled
+# To run them, rename the file and add these dev-dependencies:
+# [dev-dependencies]
+# near-workspaces = { version = "0.14", default-features = false }
+# tokio = { version = "1.0", features = ["full"] }
+# anyhow = "1.0"
+# serde_json = "1.0"
+
 [profile.release]
 codegen-units = 1
 opt-level = "z"

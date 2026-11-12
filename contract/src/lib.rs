@@ -18,6 +18,9 @@ pub const ERR_NOT_EXPIRED: &str = "ERR_NOT_EXPIRED";
 pub const ERR_WRONG_AMOUNT: &str = "ERR_WRONG_AMOUNT";
 pub const ERR_NOT_PAYER: &str = "ERR_NOT_PAYER";
 pub const ERR_DEADLINE: &str = "ERR_DEADLINE";
+pub const ERR_NOT_BUYER: &str = "ERR_NOT_BUYER";
+pub const ERR_NOT_SELLER: &str = "ERR_NOT_SELLER";
+pub const ERR_NO_PAYER: &str = "ERR_NO_PAYER";
 
 #[derive(
     BorshDeserialize,
@@ -295,6 +298,68 @@ impl Contract {
         );
         deal.status = DealStatus::Disputed;
     }
+
+    /// Buyer confirms receipt and releases funds to seller.
+    /// This provides a one-tap release path when buyer is satisfied without needing rider scan.
+    /// Security: Only the buyer can call this. Deal must be in Funded status.
+    /// Issue #24: Implements buyer-optional release path.
+    pub fn confirm_receipt(&mut self, deal_id: u64) -> Promise {
+        let predecessor = env::predecessor_account_id();
+        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+
+        // Only buyer can confirm receipt
+        require!(predecessor == deal.buyer, ERR_NOT_BUYER);
+
+        // Deal must be funded (not already released, refunded, or disputed)
+        require!(deal.status == DealStatus::Funded, ERR_BAD_STATUS);
+
+        // Mark as delivered (bypassing QR check since buyer is the authorizer)
+        deal.status = DealStatus::Delivered;
+        let seller = deal.seller.clone();
+        let price = deal.price;
+
+        // Transfer USDC to seller via ft_transfer
+        let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+            "ft_transfer".to_string(),
+            near_sdk::serde_json::json!({
+                "receiver_id": seller,
+                "amount": price.to_string(),
+            })
+            .to_string()
+            .into_bytes(),
+            NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+            Gas::from_tgas(50),
+        );
+
+        // Schedule callback to handle success/failure
+        transfer_promise.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(Gas::from_tgas(10))
+                .on_payout(deal_id, DealStatus::Funded),
+        )
+    }
+
+    /// Seller can cancel an unfunded deal.
+    /// Only works when deal is in Created status (not yet funded).
+    /// Issue #24: Part of buyer-optional flow - seller can cancel if buyer hasn't paid yet.
+    pub fn cancel_unfunded(&mut self, deal_id: u64) {
+        let predecessor = env::predecessor_account_id();
+        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+
+        // Only seller can cancel
+        require!(predecessor == deal.seller, ERR_NOT_SELLER);
+
+        // Deal must be in Created status (not funded yet)
+        require!(deal.status == DealStatus::Created, ERR_BAD_STATUS);
+
+        // Mark as refunded (logical cancellation for unfunded deals)
+        deal.status = DealStatus::Refunded;
+
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"event\":\"cancelled\",\"deal_id\":{}}}",
+            deal_id
+        ));
+    }
 }
 
 #[near(serializers = [json])]
@@ -344,6 +409,39 @@ fn hex_keccak(preimage_hex: &str) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::testing_env;
+
+    /// Helper to set up the testing environment with a specific predecessor
+    fn setup_context(predecessor: AccountId, block_timestamp: u64) -> VMContextBuilder {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(predecessor);
+        builder.block_timestamp(block_timestamp * 1_000_000); // Convert ms to ns
+        builder
+    }
+
+    /// Create a test contract
+    fn create_test_contract() -> Contract {
+        let usdc = accounts(0);
+        Contract::new(usdc)
+    }
+
+    /// Generate a test QR hash (64 hex chars)
+    fn test_qr_hash() -> String {
+        "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234".to_string()
+    }
+
+    /// Generate a unique QR hash based on a preimage
+    /// Returns (preimage, hash_hex) pair
+    fn generate_test_qr() -> (String, String) {
+        let preimage = format!("test_preimage_{}", env::block_timestamp_ms());
+        let hash_bytes = env::sha256_array(preimage.as_bytes());
+        let hash_hex = hash_bytes
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+        (preimage, hash_hex)
+    }
 
     #[test]
     fn status_labels_are_stable() {
@@ -358,5 +456,700 @@ mod tests {
     fn parse_hex32_rejects_short_input() {
         let result = std::panic::catch_unwind(|| parse_hex32("abcd"));
         assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // S01: Happy Path - Deal creation works correctly
+    // =========================================================================
+    #[test]
+    fn s01_happy_path_create_deal() {
+        let context = setup_context(accounts(1), 1_000_000); // Seller
+        testing_env!(context.build());
+
+        let mut contract = create_test_contract();
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let deadline_ms = 2_000_000; // Future deadline
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            deadline_ms,
+            test_qr_hash(),
+        );
+
+        assert_eq!(deal_id, 1, "First deal should have ID 1");
+
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.seller, seller);
+        assert_eq!(deal.rider, rider);
+        assert_eq!(deal.buyer, buyer);
+        assert_eq!(deal.price.0, 1_000_000);
+        assert_eq!(deal.status, "Created");
+        assert!(!deal.qr_consumed);
+    }
+
+    // =========================================================================
+    // S02: Double Release Protection
+    // =========================================================================
+    #[test]
+    fn s02_double_confirm_blocked() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create deal as seller
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        // Generate a unique QR pair (preimage, hash)
+        let (qr_preimage, qr_hash) = generate_test_qr();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            qr_hash.clone(),
+        );
+
+        // Fund the deal as USDC contract
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+
+        let result = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+        assert!(matches!(result, PromiseOrValue::Value(U128(0))));
+
+        // First confirm as rider with correct preimage
+        context = setup_context(rider.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_delivery(deal_id, qr_preimage.clone());
+
+        // Verify deal status is now Delivered
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(
+            deal.status, "Delivered",
+            "Deal should be Delivered after first confirm"
+        );
+        assert!(deal.qr_consumed, "QR should be consumed");
+
+        // Second confirm should panic - either ERR_REPLAYED_QR (consumed) or ERR_BAD_STATUS (not Funded)
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = contract.confirm_delivery(deal_id, qr_preimage.clone());
+        }));
+
+        assert!(result.is_err(), "Second confirm should panic");
+    }
+
+    // =========================================================================
+    // S03: Replayed QR Protection - Test at confirm level
+    // =========================================================================
+    #[test]
+    fn s03_replayed_qr_hash_rejected() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        // Generate QR pair
+        let (qr_preimage, qr_hash) = generate_test_qr();
+
+        // Create first deal with this QR hash
+        let deal_id_1 = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Item 1".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            qr_hash.clone(),
+        );
+
+        // Create second deal with SAME QR hash (allowed before consumption)
+        let deal_id_2 = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Item 2".to_string(),
+            U128(2_000_000),
+            3_000_000,
+            qr_hash.clone(),
+        );
+
+        // Fund both deals
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id_1.to_string());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(2_000_000), deal_id_2.to_string());
+
+        // Confirm first deal - consumes the QR
+        context = setup_context(rider.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_delivery(deal_id_1, qr_preimage.clone());
+
+        // Verify first deal is Delivered
+        let deal_1 = contract.get_deal(deal_id_1).expect("Deal 1 should exist");
+        assert_eq!(deal_1.status, "Delivered");
+
+        // Try to confirm second deal with same QR - should panic (QR consumed)
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = contract.confirm_delivery(deal_id_2, qr_preimage.clone());
+        }));
+
+        assert!(
+            result.is_err(),
+            "Confirming deal with consumed QR should panic"
+        );
+
+        // Verify second deal is still Funded (not released)
+        let deal_2 = contract.get_deal(deal_id_2).expect("Deal 2 should exist");
+        assert_eq!(deal_2.status, "Funded", "Deal 2 should still be Funded");
+    }
+
+    // =========================================================================
+    // S04: Timeout Refund
+    // =========================================================================
+    #[test]
+    #[should_panic(expected = "ERR_DEADLINE")]
+    fn s04_past_deadline_rejected() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+
+        let context = setup_context(seller.clone(), 2_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        // Try to create deal with deadline in the past (1_000_000 < 2_000_000)
+        let _ = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            1_000_000, // Past deadline
+            test_qr_hash(),
+        );
+    }
+
+    // =========================================================================
+    // S05: Early Refund Prevention
+    // =========================================================================
+    #[test]
+    #[should_panic(expected = "ERR_NOT_EXPIRED")]
+    fn s05_early_refund_panics() {
+        let seller = accounts(1);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            3_000_000, // Future deadline
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Try to claim refund before deadline - should panic
+        context = setup_context(buyer.clone(), 2_000_000); // Before 3_000_000 deadline
+        testing_env!(context.build());
+
+        let _ = contract.claim_timeout_refund_for(deal_id);
+    }
+
+    // =========================================================================
+    // S06: Stranger Cannot Confirm
+    // =========================================================================
+    #[test]
+    #[should_panic(expected = "ERR_NOT_RIDER")]
+    fn s06_stranger_confirm_panics() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let stranger = accounts(4);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Stranger tries to confirm - should panic
+        context = setup_context(stranger.clone(), 1_500_000);
+        testing_env!(context.build());
+
+        let _ = contract.confirm_delivery(deal_id, test_qr_hash());
+    }
+
+    // =========================================================================
+    // S08: Wrong Amount Funding
+    // =========================================================================
+    #[test]
+    #[should_panic(expected = "ERR_WRONG_AMOUNT")]
+    fn s08_wrong_amount_fund_rejected() {
+        let seller = accounts(1);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000), // Price is 1_000_000
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Try to fund with wrong amount
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(
+            buyer.clone(),
+            U128(999_999), // Wrong amount!
+            deal_id.to_string(),
+        );
+    }
+
+    // =========================================================================
+    // S09: Dispute Freeze
+    // =========================================================================
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn s09_dispute_freezes_payout() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Open dispute as buyer
+        context = setup_context(buyer.clone(), 1_500_000);
+        testing_env!(context.build());
+        contract.open_dispute(deal_id, "Item not delivered".to_string());
+
+        // Verify status is Disputed
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Disputed", "Deal should be Disputed");
+
+        // Try to confirm after dispute - should panic
+        context = setup_context(rider.clone(), 1_600_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_delivery(deal_id, test_qr_hash());
+    }
+
+    // =========================================================================
+    // Additional security tests
+    // =========================================================================
+
+    #[test]
+    #[should_panic(expected = "ERR_WRONG_AMOUNT")]
+    fn test_price_must_be_positive() {
+        let seller = accounts(1);
+
+        let context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        // Try to create deal with zero price - should panic
+        let _ = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            accounts(3),
+            "Test Item".to_string(),
+            U128(0), // Zero price!
+            2_000_000,
+            test_qr_hash(),
+        );
+    }
+
+    #[test]
+    fn test_get_deal_returns_none_for_invalid_id() {
+        let context = setup_context(accounts(1), 1_000_000);
+        testing_env!(context.build());
+        let contract = create_test_contract();
+
+        let deal = contract.get_deal(999);
+        assert!(deal.is_none(), "Should return None for non-existent deal");
+    }
+
+    #[test]
+    fn test_seller_can_open_dispute() {
+        let seller = accounts(1);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Open dispute as seller
+        context = setup_context(seller.clone(), 1_500_000);
+        testing_env!(context.build());
+        contract.open_dispute(deal_id, "Buyer changed mind".to_string());
+
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Disputed");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_PARTY")]
+    fn test_stranger_cannot_open_dispute() {
+        let seller = accounts(1);
+        let buyer = accounts(3);
+        let stranger = accounts(4);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Stranger tries to open dispute - should panic
+        context = setup_context(stranger.clone(), 1_500_000);
+        testing_env!(context.build());
+        contract.open_dispute(deal_id, "Random dispute".to_string());
+    }
+
+    // =========================================================================
+    // Issue #24: Buyer confirm_receipt path tests
+    // =========================================================================
+
+    #[test]
+    fn test_buyer_confirm_receipt_releases_funds() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Verify deal is Funded
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Funded");
+
+        // Buyer confirms receipt (one-tap release)
+        context = setup_context(buyer.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_receipt(deal_id);
+
+        // Deal status should now be Delivered (after callback it becomes Released)
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(
+            deal.status, "Delivered",
+            "Deal should be Delivered after confirm_receipt"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_BUYER")]
+    fn test_stranger_cannot_confirm_receipt() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let stranger = accounts(4);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Stranger tries to confirm receipt - should panic
+        context = setup_context(stranger.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_receipt(deal_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn test_confirm_receipt_on_unfunded_deal_panics() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+
+        // Create deal (unfunded)
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Buyer tries to confirm before funding - should panic
+        context = setup_context(buyer.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_receipt(deal_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn test_confirm_receipt_on_disputed_deal_panics() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create and fund deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Open dispute
+        context = setup_context(buyer.clone(), 1_500_000);
+        testing_env!(context.build());
+        contract.open_dispute(deal_id, "Issue with item".to_string());
+
+        // Try to confirm receipt on disputed deal - should panic
+        let _ = contract.confirm_receipt(deal_id);
+    }
+
+    #[test]
+    fn test_seller_cancel_unfunded_deal() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+
+        // Create deal (unfunded)
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Verify deal is Created
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Created");
+
+        // Seller cancels unfunded deal
+        context = setup_context(seller.clone(), 1_100_000);
+        testing_env!(context.build());
+        contract.cancel_unfunded(deal_id);
+
+        // Deal should now be Refunded (cancellation for unfunded deals)
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(
+            deal.status, "Refunded",
+            "Unfunded deal should be cancelled/Refunded"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_SELLER")]
+    fn test_buyer_cannot_cancel_deal() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+
+        // Create deal (unfunded)
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Buyer tries to cancel - should panic
+        context = setup_context(buyer.clone(), 1_100_000);
+        testing_env!(context.build());
+        contract.cancel_unfunded(deal_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn test_seller_cannot_cancel_funded_deal() {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        // Create deal
+        let mut context = setup_context(seller.clone(), 1_000_000);
+        testing_env!(context.build());
+        let mut contract = create_test_contract();
+
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider.clone(),
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        // Fund the deal
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        // Seller tries to cancel funded deal - should panic
+        context = setup_context(seller.clone(), 1_500_000);
+        testing_env!(context.build());
+        contract.cancel_unfunded(deal_id);
     }
 }
