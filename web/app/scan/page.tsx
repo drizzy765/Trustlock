@@ -1,46 +1,91 @@
 "use client";
 
-import { useWallet } from "@/lib/wallet-provider";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { initNear, isSignedIn, getAccountId, signIn, confirmDelivery, getDeal, getExplorerUrl } from "@/lib/near";
+import { sha256 } from "crypto-js";
 
 export default function ScanPage() {
-  const { accountId, isConnected, showModal } = useWallet();
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dealId, setDealId] = useState("");
   const [qrInput, setQrInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [mode, setMode] = useState<"demo" | "dry" | "live">("demo");
+  const [dealInfo, setDealInfo] = useState<any>(null);
+
+  useEffect(() => {
+    initNear().then(() => {
+      setAccountId(getAccountId());
+      setIsLoading(false);
+    });
+  }, []);
+
+  async function handleConnect() {
+    await signIn();
+  }
+
+  async function lookupDeal() {
+    if (!dealId) return;
+    try {
+      const deal = await getDeal(parseInt(dealId));
+      setDealInfo(deal);
+    } catch (e) {
+      console.error("Failed to get deal:", e);
+      setDealInfo(null);
+    }
+  }
 
   async function handleSubmit() {
-    if (!qrInput.trim()) return;
+    if (!dealId || !qrInput.trim()) return;
     
     setIsSubmitting(true);
     
-    // Simulate the contract call
     try {
-      // In real implementation, this would call confirm_delivery on the contract
-      // const tx = await contract.confirm_delivery({
-      //   deal_id: dealId,
-      //   qr_preimage_hex: qrInput
-      // });
+      // Calculate QR hash from preimage
+      const calculatedHash = sha256(qrInput).toString();
       
-      // Simulate response
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call contract
+      const result = await confirmDelivery(parseInt(dealId), qrInput);
       
       setResult({
         success: true,
-        message: "Delivery confirmed!",
-        tx_hash: "ABCDEF123456...",
+        message: "Delivery confirmed! Funds released to seller.",
+        tx_hash: result.transaction.hash,
+        deal_id: dealId,
         mode: mode,
       });
-    } catch (e) {
+      
+      // Refresh deal info
+      await lookupDeal();
+    } catch (e: any) {
+      // Check for specific contract errors
+      const errorMessage = e.message || "";
+      let userMessage = "Failed to confirm delivery.";
+      
+      if (errorMessage.includes("ERR_REPLAYED_QR")) {
+        userMessage = "❌ This QR code was already used. Replay rejected.";
+      } else if (errorMessage.includes("ERR_NOT_RIDER")) {
+        userMessage = "❌ Only the assigned rider can confirm this delivery.";
+      } else if (errorMessage.includes("ERR_ALREADY_RELEASED")) {
+        userMessage = "❌ Funds were already released for this deal.";
+      } else if (errorMessage.includes("ERR_DEADLINE")) {
+        userMessage = "❌ Deal deadline has passed.";
+      } else if (errorMessage.includes("ERR_BAD_STATUS")) {
+        userMessage = "❌ Deal is not in Funded status.";
+      }
+      
       setResult({
         success: false,
-        message: "Failed to confirm delivery. QR may be invalid or already used.",
+        message: userMessage,
+        error: errorMessage,
       });
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const isConnected = !!accountId;
 
   return (
     <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
@@ -74,7 +119,9 @@ export default function ScanPage() {
         marginBottom: 24,
         border: "1px solid #333"
       }}>
-        {isConnected ? (
+        {isLoading ? (
+          <p>Loading wallet...</p>
+        ) : isConnected ? (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Rider Account: <strong>{accountId}</strong></span>
             <span style={{ 
@@ -90,7 +137,7 @@ export default function ScanPage() {
           </div>
         ) : (
           <button 
-            onClick={showModal}
+            onClick={handleConnect}
             style={{
               background: "#22c55e",
               color: "#000",
@@ -104,6 +151,60 @@ export default function ScanPage() {
           >
             Connect Rider Wallet
           </button>
+        )}
+      </div>
+
+      {/* Deal Lookup */}
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ marginTop: 0 }}>Deal ID</h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="number"
+            value={dealId}
+            onChange={(e) => setDealId(e.target.value)}
+            placeholder="Enter deal ID (e.g., 1)"
+            style={{
+              flex: 1,
+              padding: 12,
+              background: "#1a1a1a",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 6,
+              fontSize: 14
+            }}
+          />
+          <button
+            onClick={lookupDeal}
+            disabled={!dealId || mode === "demo"}
+            style={{
+              padding: "12px 20px",
+              background: mode === "demo" ? "#444" : "#3b82f6",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              cursor: mode === "demo" ? "not-allowed" : "pointer",
+              fontWeight: "bold"
+            }}
+          >
+            Lookup
+          </button>
+        </div>
+        
+        {dealInfo && (
+          <div style={{ 
+            marginTop: 12,
+            padding: 12, 
+            background: "#1a1a1a", 
+            borderRadius: 6,
+            border: "1px solid #333"
+          }}>
+            <h4 style={{ marginTop: 0 }}>Deal #{dealInfo.deal_id}</h4>
+            <p style={{ margin: "4px 0" }}>Status: <strong>{dealInfo.status}</strong></p>
+            <p style={{ margin: "4px 0" }}>Item: {dealInfo.item}</p>
+            <p style={{ margin: "4px 0" }}>Price: {(dealInfo.price / 1000000).toFixed(2)} USDC</p>
+            <p style={{ margin: "4px 0" }}>Seller: {dealInfo.seller}</p>
+            <p style={{ margin: "4px 0" }}>Buyer: {dealInfo.buyer}</p>
+          </div>
         )}
       </div>
 
@@ -154,7 +255,7 @@ export default function ScanPage() {
         
         <button
           onClick={handleSubmit}
-          disabled={!qrInput.trim() || isSubmitting || !isConnected || mode === "demo"}
+          disabled={!dealId || !qrInput.trim() || isSubmitting || !isConnected || mode === "demo"}
           style={{
             marginTop: 12,
             width: "100%",
@@ -180,7 +281,7 @@ export default function ScanPage() {
         
         {mode === "demo" && (
           <p style={{ color: "#fbbf24", fontSize: 12, marginTop: 8 }}>
-            Switch to &quot;dry&quot; or &quot;live&quot; mode to enable on-chain submission
+            Switch to &quot;live&quot; mode to submit on-chain
           </p>
         )}
       </div>
@@ -204,7 +305,7 @@ export default function ScanPage() {
                 Transaction: <code>{result.tx_hash}</code>
               </p>
               <a 
-                href={`https://testnet.nearblocks.io/txns/${result.tx_hash}`}
+                href={getExplorerUrl(result.tx_hash)}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ color: "#3b82f6", fontSize: 12 }}
@@ -212,6 +313,12 @@ export default function ScanPage() {
                 View on Explorer →
               </a>
             </div>
+          )}
+          {result.error && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ color: "#888", fontSize: 12, cursor: "pointer" }}>Technical details</summary>
+              <pre style={{ fontSize: 10, color: "#666", marginTop: 8 }}>{result.error}</pre>
+            </details>
           )}
         </div>
       )}
@@ -232,7 +339,7 @@ export default function ScanPage() {
         </p>
         <p style={{ margin: 0 }}>
           Network: {mode === "demo" ? "demo (no blockchain)" : "testnet"} | 
-          Contract: trustlock.testnet
+          Contract: trustlock-timi.testnet
         </p>
       </div>
     </main>

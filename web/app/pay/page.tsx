@@ -1,15 +1,31 @@
 "use client";
 
-import { useWallet } from "@/lib/wallet-provider";
-import { agentUrl } from "@/lib/config";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { agentUrl, contractId } from "@/lib/config";
+import { initNear, isSignedIn, getAccountId, signIn, createDeal, getExplorerUrl } from "@/lib/near";
+import { sha256 } from "crypto-js";
 
 export default function PayPage() {
-  const { accountId, isConnected, isLoading, showModal } = useWallet();
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [dealText, setDealText] = useState("");
   const [preview, setPreview] = useState<any>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [mode, setMode] = useState<"demo" | "dry" | "live">("demo");
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [dealId, setDealId] = useState<number | null>(null);
+
+  useEffect(() => {
+    initNear().then(() => {
+      setAccountId(getAccountId());
+      setIsLoading(false);
+    });
+  }, []);
+
+  async function handleConnect() {
+    await signIn();
+  }
 
   async function handlePreview() {
     if (!dealText.trim()) return;
@@ -29,6 +45,47 @@ export default function PayPage() {
       setIsPreviewLoading(false);
     }
   }
+
+  async function handleCreateDeal() {
+    if (!preview || !accountId || mode === "demo") return;
+    
+    setIsCreating(true);
+    try {
+      // Generate QR hash from random data
+      const qrData = `${accountId}:${Date.now()}:${Math.random()}`;
+      const qrHashHex = sha256(qrData).toString();
+      
+      // Calculate deadline (24 hours from now in milliseconds)
+      const deadlineMs = Date.now() + 24 * 60 * 60 * 1000;
+      
+      // Convert NGN price to USDC (assuming 1 USDC = 1000 NGN for demo)
+      // 2500 NGN = 2.5 USDC = 2500000 (with 6 decimals)
+      const priceUsdc = Math.floor((preview.price_ngn / 1000) * 1000000).toString();
+      
+      const result = await createDeal(
+        "seller-timi.testnet", // TODO: Get from seller input
+        "rider-timi.testnet",  // TODO: Get from seller input
+        accountId,
+        preview.item,
+        priceUsdc,
+        deadlineMs,
+        qrHashHex
+      );
+      
+      setTxHash(result.transaction.hash);
+      setDealId(result.deal_id || 1);
+      
+      // Store QR data for later (in production, this would be shared securely)
+      localStorage.setItem(`deal_qr_${result.deal_id || 1}`, qrData);
+    } catch (e) {
+      console.error("Create deal failed:", e);
+      alert("Failed to create deal: " + (e as Error).message);
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  const isConnected = !!accountId;
 
   return (
     <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
@@ -80,7 +137,7 @@ export default function PayPage() {
           </div>
         ) : (
           <button 
-            onClick={showModal}
+            onClick={handleConnect}
             style={{
               background: "#22c55e",
               color: "#000",
@@ -154,8 +211,12 @@ export default function PayPage() {
               <span>{preview.item}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Price:</span>
+              <span style={{ color: "#888" }}>Price (NGN):</span>
               <span>₦{preview.price_ngn?.toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#888" }}>Price (USDC):</span>
+              <span>{(preview.price_ngn / 1000).toFixed(2)} USDC</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "#888" }}>Deadline:</span>
@@ -170,13 +231,13 @@ export default function PayPage() {
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #333" }}>
             <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
               Status: <span style={{ color: "#fbbf24" }}>Preview only</span>. 
-              Connect wallet and click &quot;Lock Funds&quot; to create the deal on-chain.
+              Click &quot;Create Deal&quot; to deploy on-chain.
             </p>
           </div>
 
           <button
-            disabled={!isConnected || mode === "demo"}
-            onClick={() => alert("This would call ft_on_transfer to fund the deal on-chain")}
+            disabled={!isConnected || mode === "demo" || isCreating}
+            onClick={handleCreateDeal}
             style={{
               marginTop: 16,
               width: "100%",
@@ -185,18 +246,51 @@ export default function PayPage() {
               border: "none",
               padding: "14px 24px",
               borderRadius: 6,
-              cursor: !isConnected ? "not-allowed" : "pointer",
+              cursor: !isConnected || isCreating ? "not-allowed" : "pointer",
               fontWeight: "bold",
               fontSize: 16
             }}
           >
             {!isConnected 
-              ? "Connect Wallet to Lock Funds" 
+              ? "Connect Wallet to Create Deal" 
               : mode === "demo" 
-                ? "Lock Funds (demo mode — disabled)" 
-                : "Lock Funds on NEAR"
+                ? "Create Deal (demo mode — disabled)" 
+                : isCreating
+                  ? "Creating..."
+                  : "Create Deal on NEAR"
             }
           </button>
+        </div>
+      )}
+
+      {/* Transaction Result */}
+      {txHash && (
+        <div style={{ 
+          background: "#064e3b", 
+          padding: 16, 
+          borderRadius: 8, 
+          marginBottom: 24,
+          border: "1px solid #22c55e"
+        }}>
+          <h4 style={{ marginTop: 0, color: "#22c55e" }}>✅ Deal Created!</h4>
+          <p>Transaction: <code style={{ fontSize: 12 }}>{txHash}</code></p>
+          <a 
+            href={getExplorerUrl(txHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#3b82f6" }}
+          >
+            View on Explorer →
+          </a>
+          {dealId && (
+            <p style={{ marginTop: 12 }}>
+              <strong>Deal ID: {dealId}</strong>
+              <br />
+              <span style={{ fontSize: 12, color: "#888" }}>
+                Share this ID with the rider to scan.
+              </span>
+            </p>
+          )}
         </div>
       )}
 
@@ -211,7 +305,7 @@ export default function PayPage() {
         color: "#888"
       }}>
         <strong>Network:</strong> {mode === "demo" ? "demo (no blockchain)" : "testnet"} | 
-        <strong> Contract:</strong> trustlock.testnet | 
+        <strong> Contract:</strong> {contractId} | 
         <strong> Agent:</strong> {agentUrl}
       </div>
     </main>

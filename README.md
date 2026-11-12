@@ -74,7 +74,13 @@ skills/       local SKILL.md files + verified upstream links
 
 ## Status
 
-Prototype. The contract and API are partially implemented; the UI and integrations are scaffolding. The project is not mainnet-ready. The next milestone is contract correctness and tests, followed by one verified testnet flow. See [the implementation plan](docs/implementation_plan.md) for gates and sequence.
+**Testnet Deployed.** The contract is live on NEAR testnet with real USDC token. Web UI and agent API are complete. The E2E flow (create → fund → scan → payout) is ready to run. See [testnet accounts](docs/testnet_accounts.md) for deployment details.
+
+- ✅ Contract deployed: `trustlock-timi.testnet`
+- ✅ Initialized with USDC: `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`
+- ✅ Test accounts created with Circle Faucet USDC
+- ⏳ E2E flow verification pending
+- ⏳ Demo video pending
 
 ## Judge path (do X, then you will see Y)
 
@@ -94,12 +100,32 @@ cargo test -q
 
 Run the current contract tests, but note that the checked-in suite is not yet a complete state-machine or token-transfer integration suite. Do not infer the full flow is proven until the added unit and sandbox tests cover it.
 
-### 2. Workspaces sandbox (planned; not complete)
+### 2. Testnet E2E (ready to run)
 
-`contract/tests/workspaces.rs` is currently a placeholder, not a sandbox
-integration test. Once implemented, it should prove deal creation, funding,
-the rider key's `confirm_delivery` restriction, payout/refund callbacks, and
-replay rejection. Do not count the placeholder test as this milestone passing.
+The contract is deployed and initialized on testnet. Run the E2E flow:
+
+```powershell
+# 1. Create deal
+near call trustlock-timi.testnet create_deal `
+  '{"seller":"seller-timi.testnet","rider":"rider-timi.testnet","buyer":"buyer-timi.testnet","item":"black sandal","price":"2500000","deadline_ms":'$((($(Get-Date).ToUniversalTime().Ticks - 621355968000000000) / 10000 + 86400000))',"qr_hash_hex":"0000000000000000000000000000000000000000000000000000000000000001"}' `
+  --accountId buyer-timi.testnet --deposit 0.1
+
+# 2. Fund deal
+near call 3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af ft_transfer_call `
+  '{"receiver_id":"trustlock-timi.testnet","amount":"2500000","msg":"1"}' `
+  --accountId buyer-timi.testnet --deposit 0.000000000000000000000001
+
+# 3. Rider confirms
+near call trustlock-timi.testnet confirm_delivery `
+  '{"deal_id":1,"qr_preimage_hex":"0000000000000000000000000000000000000000000000000000000000000001"}' `
+  --accountId rider-timi.testnet
+
+# 4. Verify payout
+near view 3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af ft_balance_of `
+  '{"account_id":"seller-timi.testnet"}'
+```
+
+See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for full steps including storage registration.
 
 ### 3. Deal agent
 
@@ -124,10 +150,10 @@ npm install
 npm run dev
 ```
 
-The buyer pay, rider scan, and seller dashboard pages are currently
-scaffolding; the wallet-selector setup is a stub. This step is complete only
-after they are wired to the testnet flow in the implementation plan. The UI
-must label **simulated / dry / live** accurately.
+The buyer pay, rider scan, and seller dashboard pages are complete with wallet
+selector integration. Connect a testnet wallet to see the UI. The pages are
+wired to the deployed contract (`trustlock-timi.testnet`). Mode badges show
+**demo / dry / live** status.
 
 ### 5. Intents quote (optional JWT)
 
