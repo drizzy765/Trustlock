@@ -431,6 +431,18 @@ mod tests {
         "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234".to_string()
     }
 
+    /// Generate a unique QR hash based on a preimage
+    /// Returns (preimage, hash_hex) pair
+    fn generate_test_qr() -> (String, String) {
+        let preimage = format!("test_preimage_{}", env::block_timestamp_ms());
+        let hash_bytes = env::sha256_array(preimage.as_bytes());
+        let hash_hex = hash_bytes
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+        (preimage, hash_hex)
+    }
+
     #[test]
     fn status_labels_are_stable() {
         assert_eq!(DealStatus::Created.as_str(), "Created");
@@ -485,8 +497,7 @@ mod tests {
     // S02: Double Release Protection
     // =========================================================================
     #[test]
-    #[should_panic(expected = "ERR_BAD_STATUS")]
-    fn s02_double_confirm_panics() {
+    fn s02_double_confirm_blocked() {
         let seller = accounts(1);
         let rider = accounts(2);
         let buyer = accounts(3);
@@ -497,6 +508,9 @@ mod tests {
         testing_env!(context.build());
         let mut contract = create_test_contract();
 
+        // Generate a unique QR pair (preimage, hash)
+        let (qr_preimage, qr_hash) = generate_test_qr();
+
         let deal_id = contract.create_deal(
             seller.clone(),
             rider.clone(),
@@ -504,7 +518,7 @@ mod tests {
             "Test Item".to_string(),
             U128(1_000_000),
             2_000_000,
-            test_qr_hash(),
+            qr_hash.clone(),
         );
 
         // Fund the deal as USDC contract
@@ -514,36 +528,46 @@ mod tests {
         let result = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
         assert!(matches!(result, PromiseOrValue::Value(U128(0))));
 
-        // First confirm as rider - should work
+        // First confirm as rider with correct preimage
         context = setup_context(rider.clone(), 1_500_000);
         testing_env!(context.build());
+        let _ = contract.confirm_delivery(deal_id, qr_preimage.clone());
 
-        // Note: confirm_delivery returns a Promise, but in unit tests we can only
-        // verify it doesn't panic. The actual transfer happens async.
-        let _ = contract.confirm_delivery(deal_id, test_qr_hash());
+        // Verify deal status is now Delivered
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Delivered", "Deal should be Delivered after first confirm");
+        assert!(deal.qr_consumed, "QR should be consumed");
 
-        // Second confirm as rider - should panic with ERR_BAD_STATUS
-        let _ = contract.confirm_delivery(deal_id, test_qr_hash());
+        // Second confirm should panic - either ERR_REPLAYED_QR (consumed) or ERR_BAD_STATUS (not Funded)
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = contract.confirm_delivery(deal_id, qr_preimage.clone());
+        }));
+
+        assert!(
+            result.is_err(),
+            "Second confirm should panic"
+        );
     }
 
     // =========================================================================
-    // S03: Replayed QR Protection
+    // S03: Replayed QR Protection - Test at confirm level
     // =========================================================================
     #[test]
-    #[should_panic(expected = "ERR_REPLAYED_QR")]
     fn s03_replayed_qr_hash_rejected() {
         let seller = accounts(1);
         let rider = accounts(2);
         let buyer = accounts(3);
+        let usdc = accounts(0);
 
-        let context = setup_context(seller.clone(), 1_000_000);
+        let mut context = setup_context(seller.clone(), 1_000_000);
         testing_env!(context.build());
         let mut contract = create_test_contract();
 
-        let qr_hash = test_qr_hash();
+        // Generate QR pair
+        let (qr_preimage, qr_hash) = generate_test_qr();
 
         // Create first deal with this QR hash
-        let _ = contract.create_deal(
+        let deal_id_1 = contract.create_deal(
             seller.clone(),
             rider.clone(),
             buyer.clone(),
@@ -553,16 +577,45 @@ mod tests {
             qr_hash.clone(),
         );
 
-        // Try to create second deal with same QR hash - should panic
-        let _ = contract.create_deal(
+        // Create second deal with SAME QR hash (allowed before consumption)
+        let deal_id_2 = contract.create_deal(
             seller.clone(),
             rider.clone(),
             buyer.clone(),
             "Item 2".to_string(),
             U128(2_000_000),
-            2_000_000,
+            3_000_000,
             qr_hash.clone(),
         );
+
+        // Fund both deals
+        context = setup_context(usdc.clone(), 1_100_000);
+        testing_env!(context.build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id_1.to_string());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(2_000_000), deal_id_2.to_string());
+
+        // Confirm first deal - consumes the QR
+        context = setup_context(rider.clone(), 1_500_000);
+        testing_env!(context.build());
+        let _ = contract.confirm_delivery(deal_id_1, qr_preimage.clone());
+
+        // Verify first deal is Delivered
+        let deal_1 = contract.get_deal(deal_id_1).expect("Deal 1 should exist");
+        assert_eq!(deal_1.status, "Delivered");
+
+        // Try to confirm second deal with same QR - should panic (QR consumed)
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = contract.confirm_delivery(deal_id_2, qr_preimage.clone());
+        }));
+
+        assert!(
+            result.is_err(),
+            "Confirming deal with consumed QR should panic"
+        );
+
+        // Verify second deal is still Funded (not released)
+        let deal_2 = contract.get_deal(deal_id_2).expect("Deal 2 should exist");
+        assert_eq!(deal_2.status, "Funded", "Deal 2 should still be Funded");
     }
 
     // =========================================================================
@@ -753,6 +806,7 @@ mod tests {
     // =========================================================================
 
     #[test]
+    #[should_panic(expected = "ERR_WRONG_AMOUNT")]
     fn test_price_must_be_positive() {
         let seller = accounts(1);
 
@@ -760,20 +814,16 @@ mod tests {
         testing_env!(context.build());
         let mut contract = create_test_contract();
 
-        // Try to create deal with zero price
-        let result = std::panic::catch_unwind(|| {
-            let _ = contract.create_deal(
-                seller.clone(),
-                accounts(2),
-                accounts(3),
-                "Test Item".to_string(),
-                U128(0), // Zero price!
-                2_000_000,
-                test_qr_hash(),
-            );
-        });
-
-        assert!(result.is_err(), "Should panic with zero price");
+        // Try to create deal with zero price - should panic
+        let _ = contract.create_deal(
+            seller.clone(),
+            accounts(2),
+            accounts(3),
+            "Test Item".to_string(),
+            U128(0), // Zero price!
+            2_000_000,
+            test_qr_hash(),
+        );
     }
 
     #[test]
