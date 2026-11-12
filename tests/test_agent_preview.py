@@ -81,6 +81,29 @@ def test_yoruba_bring_it_tomorrow_without_ni(bring):
     assert out["deadline_hours"] == 24
 
 
+def test_a_huge_number_is_no_price_and_does_not_crash():
+    out = preview_terms("₦" + "9" * 1900 + " sandal")
+    assert out["price_ngn"] is None
+    assert out["warning"] == "No price found: confirm the amount with the buyer."
+    assert preview_terms("sandal 999999999999 naira")["price_ngn"] is None
+    assert preview_terms("sandal 100000000 naira")["price_ngn"] == 100_000_000
+
+
+@pytest.mark.parametrize(
+    "text, item, price",
+    [
+        ("hold iPhone 12 for 2500 naira", "iPhone 12", 2500),
+        ("hold 2 pairs black sandal for 2500 naira", "2 pairs black sandal", 2500),
+        ("Samsung A54 for ₦150,000, deliver tomorrow", "Samsung A54", 150000),
+        ("abeg hold 2k5 for the black sandal", "black sandal", 2500),
+        ("n95 mask 2.5k", "n95 mask", 2500),
+    ],
+)
+def test_numbers_that_are_not_the_price_stay_in_the_item(text, item, price):
+    out = preview_terms(text)
+    assert out["item"] == item and out["price_ngn"] == price
+
+
 def test_ola_as_a_name_is_not_a_deadline():
     out = preview_terms("Hold 5k for Ola, black sandal")
     assert out["deadline_hours"] == 48

@@ -55,6 +55,7 @@ def detect_language(text: str) -> str:
 
 _NUMBER_WORD = "|".join(_YORUBA_NUMBERS)
 MIN_PLAUSIBLE_NGN = 100  # "naira 2 days" is a delay, not a price
+MAX_PLAUSIBLE_NGN = 100_000_000  # the ceiling of a deal draft; above it there is no price
 _AMOUNT_TIERS: list[tuple[int, re.Pattern[str]]] = [
     # explicit currency: ₦3,500 / NGN 3500 / n3500 / naira 2k5
     (
@@ -85,14 +86,22 @@ def _value(tier: int, match: re.Match[str]) -> int:
     return round(float(whole))
 
 
+def _safe_value(tier: int, match: re.Match[str]) -> int | None:
+    """`_value`, or None for a number too long to convert (a 1,900 digit "price")."""
+    try:
+        return _value(tier, match)
+    except OverflowError:
+        return None
+
+
 def _amounts(text: str) -> list[tuple[int, int, int]]:
     """Every (tier, position, naira) found, best evidence first within the same position."""
     folded = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", normalise(text))
     found = []
     for tier, pattern in _AMOUNT_TIERS:
         for match in pattern.finditer(folded):
-            amount = _value(tier, match)
-            if amount >= MIN_PLAUSIBLE_NGN:
+            amount = _safe_value(tier, match)
+            if amount is not None and MIN_PLAUSIBLE_NGN <= amount <= MAX_PLAUSIBLE_NGN:
                 found.append((tier, match.start(), amount))
     return found
 
@@ -154,9 +163,21 @@ _DROP_PHRASES = sorted(
     key=len,
     reverse=True,
 )  # fmt: skip
-_PRICE_TOKEN = re.compile(r"^(?:₦|ngn|n)?\d[\d,]*(?:\.\d+)?(?:k\d*)?$")
+_PRICE_TOKEN = re.compile(r"^(?:₦|ngn|n)?(\d[\d,]*)(?:\.(\d+))?(?:(k)(\d*))?$")
 _CURRENCY_TOKENS = {"₦", "ngn", "naira"}
 _EDGE_PUNCTUATION = ".,;:!?()\"'"
+
+
+def _token_value(token: str) -> int | None:
+    """The naira value a price-looking token stands for ("2k5" is 2500), or None."""
+    match = _PRICE_TOKEN.match(token)
+    if not match or len(match.group(1)) > 15:
+        return None
+    whole, decimals, k, k_digits = match.groups()
+    whole = whole.replace(",", "")
+    fraction = (k_digits or decimals) if k else decimals
+    number = float(f"{whole}.{fraction}" if fraction else whole)
+    return round(number * 1000) if k else round(number)
 
 
 def extract_item(text: str) -> str:
@@ -164,6 +185,7 @@ def extract_item(text: str) -> str:
     original = [t.strip(_EDGE_PUNCTUATION) for t in text.split()]
     original = [t for t in original if t]
     norm = [normalise(t) for t in original]
+    prices = set(_distinct_amounts(text))
     kept: list[str] = []
     i = 0
     while i < len(norm):
@@ -190,7 +212,7 @@ def extract_item(text: str) -> str:
         if token.isdigit() and i + 1 < len(norm) and norm[i + 1] in ("day", "days", "ojo"):
             i += 2
             continue
-        if _PRICE_TOKEN.match(token) or token in _CURRENCY_TOKENS:
+        if token in _CURRENCY_TOKENS or _token_value(token) in prices:
             i += 1
             continue
         kept.append(original[i])

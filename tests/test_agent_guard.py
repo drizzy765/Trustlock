@@ -131,6 +131,38 @@ def test_the_refusal_names_the_right_category():
     assert both["code"] == "ERR_REFUSED_SECRET_REQUEST"
 
 
+SEED = "witch collapse practice feed shame open despair creek road again ice least"
+OPAQUE = "3Kz9aXq7Lp2mNvB8cD4eFgH6jR1sT5uWyZ0xQ3Kz9aXq7Lp2mNvB8cD4eFgH6jR1sT5uWyZ0xQ"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"black sandal 2k5; seed: {SEED}",
+        f"black sandal 2k5 seed phrase: {SEED}",
+        f"black sandal 2k5 {OPAQUE}",
+        f"black sandal 2k5 secret key: {OPAQUE}",
+        f"black sandal 2k5 private key {OPAQUE}",
+        "black sandal 2k5 key: 3Kz9aXq7Lp2mNvB8cD4e",
+        "black sandal 2k5 password is hunter2",
+    ],
+)
+def test_a_secret_pasted_behind_a_label_is_refused_and_not_echoed(text):
+    out = screen(text)
+    assert out is not None and out.code.startswith("ERR_REFUSED_SECRET_")
+    result = preview_terms(text)
+    assert result["refused"] is True and "item" not in result
+    assert "witch" not in str(result) and "3Kz9" not in str(result)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["hold maize seed: 2k5", "hold black sandal, key: 2k5", "hold black sandal. Access: gate B"],
+)
+def test_words_like_seed_and_key_in_a_deal_are_not_refused(text):
+    assert screen(text) is None
+
+
 def test_a_pasted_key_gets_its_own_warning():
     out = preview_terms("my key is ed25519:3xampleNotARealKeyJustAShape")
     assert out["code"] == "ERR_REFUSED_SECRET_IN_INPUT"

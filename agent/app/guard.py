@@ -197,6 +197,14 @@ _REQUEST_VERB = re.compile(
     r"recover|what|whats|wetin|comot|open|check|fun mi|so fun mi|fi han mi|ran mi)\b"
 )
 _KEY_MATERIAL = re.compile(r"ed25519")
+# A secret typed behind its label: "seed phrase: ...", "mnemonic = ...", "my password is ...".
+_SECRET_LABELLED = re.compile(
+    r"\b(?:(?:seed|recovery|secret|private|signing|access|master)\s+(?:phrase|words?|keys?)|"
+    r"mnemonic|passphrase|passwords?)\s*(?:[:=]|\bis\b|\bare\b)\s*\S"
+)
+_KEY_VALUE = re.compile(r"\bkeys?\s*[:=]\s*\S{16,}")  # "key: 3Kz9..."; "key: 2k5" is not one
+_BARE_SEED_LIST = re.compile(r"\bseed\s*[:=]\s*(?:[a-z]+\s+){9,}")  # "maize seed: 2k5" is fine
+_OPAQUE_TOKEN = re.compile(r"[A-Za-z0-9+/=_-]{32,}")  # a base58, base64 or hex key (has letters)
 
 
 # --- decision -----------------------------------------------------------------------------------
@@ -253,14 +261,21 @@ def _secret_request(variant: str, words: str) -> bool:
     return asking and bool(_KEY_YOU_HOLD.search(words))
 
 
+def _pasted(variant: str) -> bool:
+    """True if a secret is typed after its label (the label's separator is kept in `variant`)."""
+    return any(p.search(variant) for p in (_SECRET_LABELLED, _KEY_VALUE, _BARE_SEED_LIST))
+
+
 def screen(text: str) -> Refusal | None:
     """Return a Refusal if ``text`` tries to move money, get a key or change the rules."""
     found: set[Refusal] = set()
+    if any(re.search(r"[a-z]", m.group(), re.I) for m in _OPAQUE_TOKEN.finditer(text)):
+        found.add(SECRET_IN_INPUT)
     for variant in _variants(text):
         words = _words(variant)
         if _secret_request(variant, words):
             found.add(SECRET_REQUEST)
-        if _KEY_MATERIAL.search(variant) or _SECRET_PASTED.search(words):
+        if _KEY_MATERIAL.search(variant) or _SECRET_PASTED.search(words) or _pasted(variant):
             found.add(SECRET_IN_INPUT)
         if _fund_movement(variant):
             found.add(FUND_MOVEMENT)
