@@ -204,7 +204,7 @@ _SECRET_LABELLED = re.compile(
 )
 _KEY_VALUE = re.compile(r"\bkeys?\s*[:=]\s*\S{16,}")  # "key: 3Kz9..."; "key: 2k5" is not one
 _BARE_SEED_LIST = re.compile(r"\bseed\s*[:=]\s*(?:[a-z]+\s+){9,}")  # "maize seed: 2k5" is fine
-_OPAQUE_TOKEN = re.compile(r"[A-Za-z0-9+/=_-]{32,}")  # a base58, base64 or hex key (has letters)
+_OPAQUE_TOKEN = re.compile(r"[a-z0-9+/=_-]{32,}")  # a base58, base64 or hex key (has letters)
 
 
 # --- decision -----------------------------------------------------------------------------------
@@ -269,7 +269,8 @@ def _pasted(variant: str) -> bool:
 def screen(text: str) -> Refusal | None:
     """Return a Refusal if ``text`` tries to move money, get a key or change the rules."""
     found: set[Refusal] = set()
-    if any(re.search(r"[a-z]", m.group(), re.I) for m in _OPAQUE_TOKEN.finditer(text)):
+    # Normalised first: zero-width characters inside a key must not split it.
+    if any(re.search(r"[a-z]", m.group()) for m in _OPAQUE_TOKEN.finditer(normalise(text))):
         found.add(SECRET_IN_INPUT)
     for variant in _variants(text):
         words = _words(variant)

@@ -155,6 +155,13 @@ def test_a_secret_pasted_behind_a_label_is_refused_and_not_echoed(text):
     assert "witch" not in str(result) and "3Kz9" not in str(result)
 
 
+def test_a_key_split_by_zero_width_characters_is_still_refused():
+    key = "​".join([OPAQUE[i : i + 16] for i in range(0, len(OPAQUE), 16)])
+    out = screen(f"black sandal 2k5 {key}")
+    assert out is not None and out.code == "ERR_REFUSED_SECRET_IN_INPUT"
+    assert "3Kz9" not in str(preview_terms(f"black sandal 2k5 {key}"))
+
+
 @pytest.mark.parametrize(
     "text",
     ["hold maize seed: 2k5", "hold black sandal, key: 2k5", "hold black sandal. Access: gate B"],
