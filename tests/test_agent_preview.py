@@ -72,6 +72,20 @@ def test_yoruba_without_diacritics_and_with_number_words():
     assert out["item"] == "apo pupa"
 
 
+@pytest.mark.parametrize("bring", ["e gbe wa ola", "ẹ gbé e wá ọ̀la", "e gbe e wa ni ola"])
+def test_yoruba_bring_it_tomorrow_without_ni(bring):
+    # "I want to buy black shoes for two thousand, bring it tomorrow."
+    out = preview_terms(f"Mo fe ra bata dudu ni egberun meji, {bring}")
+    assert out["item"] == "bata dudu"
+    assert out["price_ngn"] == 2000
+    assert out["deadline_hours"] == 24
+
+
+def test_ola_as_a_name_is_not_a_deadline():
+    out = preview_terms("Hold 5k for Ola, black sandal")
+    assert out["deadline_hours"] == 48
+
+
 @pytest.mark.parametrize(
     "text, amount",
     [

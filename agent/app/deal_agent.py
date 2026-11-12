@@ -102,7 +102,7 @@ def parse_amount_ngn(text: str) -> int | None:
     found = _amounts(text)
     if not found:
         return None
-    tier, _, amount = min(found, key=lambda f: (f[0], f[1]))
+    _, _, amount = min(found, key=lambda f: (f[0], f[1]))
     return amount
 
 
@@ -125,7 +125,8 @@ def parse_deadline_hours(text: str) -> int:
     days = re.search(r"\b(\d{1,2}) (?:days?|ojo)\b", spaced)
     if days:
         return int(days.group(1)) * 24
-    if re.search(r"\b(?:tomorrow|tmrw|2moro|today|tonight|loni)\b|\bni (?:ola|oni)\b", spaced):
+    next_day = r"\b(?:tomorrow|tmrw|2moro|today|tonight|loni)\b|\b(?:ni|wa) (?:ola|oni)\b"
+    if re.search(next_day, spaced):
         return NEXT_DAY_HOURS
     return DEFAULT_DEADLINE_HOURS
 
@@ -146,7 +147,8 @@ _DROP_PHRASES = sorted(
         ("abeg", "hold"), ("abeg",), ("make", "i"), ("i", "wan", "buy"), ("i", "wan"), ("oga",),
         ("di",),
         # Yoruba
-        ("e", "jowo"), ("jowo",), ("mo", "fe", "ra"), ("mo", "fe"), ("e", "gbe", "e", "wa"),
+        ("e", "jowo"), ("jowo",), ("mo", "fe", "ra"), ("mo", "fe"),
+        ("e", "gbe", "e", "wa", "ola"), ("e", "gbe", "wa", "ola"), ("e", "gbe", "e", "wa"),
         ("e", "gbe", "wa"), ("ni", "ola"), ("ni",),
     ],
     key=len,
