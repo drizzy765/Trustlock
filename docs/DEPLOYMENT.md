@@ -1,5 +1,15 @@
 # TrustLock Testnet Deployment Guide
 
+## Status
+
+✅ **Contract Deployed:** `trustlock-timi.testnet`  
+⚠️ **Pending:** Contract initialization (waiting for real NEP-141 token)  
+⏳ **Next:** Create test accounts → Initialize → Test E2E
+
+**Deployment Transaction:** https://testnet.nearblocks.io/txns/FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo
+
+---
+
 ## Prerequisites
 
 1. **NEAR CLI installed:**
@@ -17,11 +27,11 @@
    ```
    NEAR_NETWORK=testnet
    TRUSTLOCK_CONTRACT_ID=trustlock-timi.testnet
-   TRUSTLOCK_USDC_ACCOUNT=usdc.fakes.testnet
+   TRUSTLOCK_USDC_ACCOUNT=usdc.fakes.testnet  # TODO: Replace with real token
    TRUSTLOCK_OWNER_ACCOUNT=timi.testnet
    ```
 
-## Step 1: Build Contract
+## Step 1: Build Contract (Skip if Using Pre-built WASM)
 
 ```powershell
 cd C:\path\to\trustlock

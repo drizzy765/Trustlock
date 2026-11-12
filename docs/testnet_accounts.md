@@ -1,42 +1,105 @@
-# Testnet accounts and wallet addresses
+# Testnet Accounts — TrustLock
 
-**Short answer: there is no shared TrustLock wallet or contract address yet.** The contract has not been deployed. `trustlock.testnet` in `.env.example` and `web/lib/config.ts` is a placeholder default; that account does not exist on NEAR testnet. When the contract is deployed (issue #10), its account ID will be posted to the team and added to the table below.
+## Deployed Contract
 
-## Live addresses
+**Contract ID:** `trustlock-timi.testnet`  
+**Network:** NEAR Testnet  
+**Status:** ✅ Deployed (not yet initialized)  
+**Deployment Transaction:** `FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo`
 
-| What | Account ID | Status |
-| --- | --- | --- |
-| Escrow contract | _TBD (set `TRUSTLOCK_CONTRACT_ID` / `NEXT_PUBLIC_CONTRACT_ID`)_ | Not deployed yet (#10) |
-| Test token (fake USDC, NEP-141) | `usdc.fakes.testnet` | Exists on testnet; not real USDC |
+**Explorer:** https://testnet.nearblocks.io/txns/FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo
 
-## Do I need my own account?
+## Contract Initialization (PENDING)
 
-- **Contract unit tests (`cargo test`) and near-workspaces integration tests (#5, #6):** no. near-workspaces runs a local sandbox with throwaway accounts.
-- **Manual testnet runs, the rider key script (#7) and the end-to-end demo (#10):** yes. Each developer uses their own free testnet account.
+⚠️ **DO NOT INITIALIZE YET** — `usdc.fakes.testnet` is a placeholder. Need to identify a real testnet NEP-141 token contract first.
 
-## Create a testnet account
+### Real Testnet Tokens to Consider
 
-Option A: browser wallet at https://testnet.mynearwallet.com/ (free, funded by the faucet).
+| Token | Contract ID | Notes |
+|-------|-------------|-------|
+| USDC (testnet) | `usdc.testnet` | Check if exists |
+| NEAR | `wrap.near` | wNEAR on testnet |
+| Custom | Deploy own | Create simple NEP-141 |
 
-Option B: `near-cli-rs`:
+### Initialization Command (When Ready)
 
-```bash
-near account create-account sponsor-by-faucet-service <yourname>-trustlock.testnet \
-  autogenerate-new-keypair save-to-keychain network-config testnet create
+```powershell
+near call trustlock-timi.testnet new `
+  '{"usdc":"REAL_TOKEN_CONTRACT.testnet"}' `
+  --accountId trustlock-timi.testnet
 ```
 
-Then create role subaccounts that match `.env.example` (owner, buyer, seller, rider), for example:
+## Required Test Accounts
 
-```bash
-near account create-account fund-myself seller.<yourname>-trustlock.testnet '1 NEAR' \
-  autogenerate-new-keypair save-to-keychain sign-as <yourname>-trustlock.testnet \
-  network-config testnet sign-with-keychain send
+Create these accounts for E2E testing:
+
+| Role | Account | Purpose |
+|------|---------|---------|
+| Owner | `timi.testnet` | Contract owner, has full access |
+| Seller | `seller-timi.testnet` | Receives escrow payouts |
+| Buyer | `buyer-timi.testnet` | Creates deals, funds escrow |
+| Rider | `rider-timi.testnet` | Confirms delivery (restricted key) |
+
+### Create Accounts
+
+```powershell
+# Seller
+near create-account seller-timi.testnet `
+  --masterAccount timi.testnet `
+  --initialBalance 5
+
+# Buyer
+near create-account buyer-timi.testnet `
+  --masterAccount timi.testnet `
+  --initialBalance 5
+
+# Rider
+near create-account rider-timi.testnet `
+  --masterAccount timi.testnet `
+  --initialBalance 2
 ```
 
-Put the **public account IDs** in your local `.env` (`TRUSTLOCK_OWNER_ACCOUNT`, `TRUSTLOCK_SELLER_ACCOUNT`, `TRUSTLOCK_BUYER_ACCOUNT`, `TRUSTLOCK_RIDER_ACCOUNT`) and only **paths** to key files in `TRUSTLOCK_OWNER_KEYFILE` / `TRUSTLOCK_RIDER_KEYFILE`.
+## Rider Key Setup
 
-## Rules
+After rider account created, add restricted function-call key:
 
-- Never commit or paste in chat: private keys, seed phrases, `.env`, or `~/.near-credentials`. Only public account IDs are shared.
-- Testnet only. Any mainnet step needs team agreement and stays well under $1 (see `AGENTS.md`).
-- The rider key is a function-call access key that may only call `confirm_delivery` (#6, #7).
+```powershell
+# Generate key
+near generate-key rider-timi.testnet
+
+# Get public key
+near keys rider-timi.testnet
+
+# Add restricted key (replace <PUBLIC_KEY>)
+near add-key rider-timi.testnet <PUBLIC_KEY> `
+  --allowance 0.25 `
+  --receiverId trustlock-timi.testnet `
+  --methodNames confirm_delivery `
+  --accountId rider-timi.testnet
+```
+
+## Environment Variables
+
+Update your `.env` file:
+
+```
+TRUSTLOCK_CONTRACT_ID=trustlock-timi.testnet
+TRUSTLOCK_USDC_ACCOUNT=usdc.fakes.testnet  # TODO: Replace with real token
+TRUSTLOCK_OWNER_ACCOUNT=timi.testnet
+TRUSTLOCK_SELLER_ACCOUNT=seller-timi.testnet
+TRUSTLOCK_BUYER_ACCOUNT=buyer-timi.testnet
+TRUSTLOCK_RIDER_ACCOUNT=rider-timi.testnet
+```
+
+## Next Steps
+
+1. [ ] Find real testnet NEP-141 token
+2. [ ] Initialize contract with real token
+3. [ ] Create test accounts (buyer, seller, rider)
+4. [ ] Add rider restricted key
+5. [ ] Test end-to-end flow
+
+## Links
+
+- **Contract:** https://testnet.nearblocks.io/address/trustlock-timi.testnet
+- **Deployment TX:** https://testnet.nearblocks.io/txns/FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo

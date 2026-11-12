@@ -60,27 +60,49 @@
 
 ---
 
-## ⏳ PENDING (Requires Timi's Testnet Accounts)
+## ✅ COMPLETED (Deployed to Testnet)
 
 ### Task 6: Deploy contract to NEAR testnet
-**Status:** ⏳ BLOCKED - Needs Timi's testnet accounts
+**Status:** ✅ COMPLETE
 **Priority:** HIGH
 
-**What Timi needs to do:**
-1. Create testnet account (e.g., `timi.testnet`)
-2. Run: `near create-account trustlock-timi.testnet --masterAccount timi.testnet`
-3. Run: `near deploy trustlock-timi.testnet target/wasm32-unknown-unknown/release/trustlock.wasm`
-4. Run: `near call trustlock-timi.testnet new '{"usdc":"usdc.fakes.testnet"}'`
+**Deployment Details:**
+- ✅ Contract ID: `trustlock-timi.testnet`
+- ✅ Transaction: https://testnet.nearblocks.io/txns/FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo
+- ✅ Built in Codespaces, downloaded, deployed locally
+- ⚠️ **NOT INITIALIZED** — waiting for real NEP-141 token (usdc.fakes.testnet is placeholder)
 
 **Files ready:**
 - ✅ Contract built: `target/wasm32-unknown-unknown/release/trustlock.wasm` (335KB)
 - ✅ Deployment guide: `docs/DEPLOYMENT.md`
-- ✅ PowerShell script: `scripts/make.ps1 contract-deploy`
+- ✅ Testnet accounts doc: `docs/testnet_accounts.md` (updated)
 
 ---
 
-### Task 7: Run end-to-end testnet flow
-**Status:** ⏳ BLOCKED - Needs contract deployed first
+## ⏳ PENDING
+
+### Task 7: Initialize contract with real NEP-141 token
+**Status:** ⏳ BLOCKED - Need real testnet token
+**Priority:** HIGH
+
+**What we need:**
+- Real testnet NEP-141 token contract (usdc.fakes.testnet is placeholder)
+- Options:
+  1. Find existing testnet USDC
+  2. Deploy simple test token
+  3. Ask NEAR community for test tokens
+
+**Then:**
+```powershell
+near call trustlock-timi.testnet new `
+  '{"usdc":"REAL_TOKEN.testnet"}' `
+  --accountId trustlock-timi.testnet
+```
+
+---
+
+### Task 8: Run end-to-end testnet flow
+**Status:** ⏳ BLOCKED - Needs contract initialized first
 **Priority:** HIGH
 
 **Steps to test after deployment:**
@@ -103,17 +125,17 @@
 
 **Phase 3 Code Complete:** All web UI, agent endpoints, and scripts are done.
 **Build Status:** Web builds successfully, all 21 contract tests pass.
-**Next Step:** Timi deploys to testnet and runs the E2E flow.
+**Contract Deployed:** `trustlock-timi.testnet` (not yet initialized)
+**Next Step:** Find real testnet NEP-141 token → Initialize → E2E test
 
 **Quick Start:**
 ```powershell
-# Test agent
-.\scripts\make.ps1 agent-smoke
+# Check deployed contract
+near view trustlock-timi.testnet get_deal '{"deal_id": 0}'
+# Should fail (not initialized yet)
 
-# Build web
-.\scripts\make.ps1 contract-build
-cd web; npm run dev
-
-# Deploy contract (Timi only)
-# See docs/DEPLOYMENT.md
+# Initialize (when token found)
+near call trustlock-timi.testnet new `
+  '{"usdc":"REAL_TOKEN.testnet"}' `
+  --accountId trustlock-timi.testnet
 ```
