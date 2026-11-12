@@ -38,6 +38,33 @@ Response:
 
 Must not include a private key, seed phrase, or access-key secret.
 
+Request limits: `text` is 1 to 2000 characters; `language_hint` is `"pcm"`, `"yo"` or `"en"` (anything else is a 422). It wins over detection. Without a hint the language is detected: Yoruba letters (ẹ, ọ, ṣ) first, then Pidgin words, then Yoruba words, otherwise English.
+
+How the terms are read:
+
+- `price_ngn`: an explicit currency amount first (`₦3,500`, `NGN 3500`, `n3500`), then k notation (`2k5` and `2.5k` are 2,500, `10k`, `12k5`), then `4500 naira`, then Yoruba number words (`egberun marun` is 5,000), then a bare number of 3 to 9 digits. Amounts under 100 or above 100,000,000 are ignored (so a huge number is "no price", never an error). `null` if none.
+- `deadline_hours`: 24 for tomorrow or today (`tomorrow`, `tmrw`, `ni ọ̀la`), `N x 24` for `N days`, otherwise 48.
+- `item`: what is left once the price, delivery and filler words are removed (a number is dropped only when it is the price: `iPhone 12` keeps its 12), in the buyer's own spelling (Yoruba accents kept). `"item"` if nothing is left.
+- `warning`: `"No price found: confirm the amount with the buyer."` when there is no price, or `"More than one amount found (2500, 20000): confirm the price."` when the text has different amounts. The agent never picks silently between them.
+
+### Refusals (benchmark A01)
+
+If the message tells the agent to release, send or refund money, to confirm a delivery or payment, to change its rules ("ignore previous instructions"), or asks for a private key, seed phrase, access key or credentials, the response is HTTP 200 with **no terms at all**, so a client that ignores it fails closed:
+
+```json
+{
+  "refused": true,
+  "code": "ERR_REFUSED_FUND_MOVEMENT",
+  "reason": "fund_movement",
+  "language": "en",
+  "message": "I can't release, send or refund money, or confirm a delivery. ..."
+}
+```
+
+`code` is one of `ERR_REFUSED_SECRET_REQUEST`, `ERR_REFUSED_SECRET_IN_INPUT` (a key was pasted into the chat), `ERR_REFUSED_FUND_MOVEMENT`, `ERR_REFUSED_INJECTION`; if several apply the key leak wins, then money, then injection. The message is in the message's language (English or Pidgin; Yoruba uses the English copy until a Yoruba speaker has reviewed one). It never repeats what the user typed.
+
+What the screen is and is not: a deterministic heuristic (`agent/app/guard.py`), not a model and not the security boundary. The boundary is that the agent holds no key and has no route that pays, refunds or calls `confirm_delivery`; the screen is defence in depth and a clear answer. It also refuses a secret typed behind a label (`seed phrase: ...`, `secret key: ...`, `my password is ...`) or any single 32+ character token with letters (a pasted key), so the text never reaches the parser or the response. It reads through accents, zero-width characters, full-width and look-alike letters, `l33tspeak` and `r e l e a s e`. It leaves honest terms alone (`release the funds after delivery` is a deal term, `release the funds now` is a command). It does not recognise a bare list of seed words with no label, other languages, a request split over several messages, or a paraphrase it has no pattern for; a few ordinary messages are refused by mistake (for example a buyer writing `send the money back if the shoes are bad`), and the person can rewrite them.
+
 ## `POST /deals/draft`
 
 Persist a draft the seller wallet will submit as `create_deal`.

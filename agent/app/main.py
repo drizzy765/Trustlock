@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -19,8 +20,10 @@ deal_counter = 0
 
 
 class PreviewIn(BaseModel):
-    text: str
-    language_hint: str | None = None
+    """A deal message. Bounded and restricted so nothing arbitrary is echoed back."""
+
+    text: str = Field(min_length=1, max_length=2000)
+    language_hint: Literal["pcm", "yo", "en"] | None = None
 
 
 class DraftIn(BaseModel):
