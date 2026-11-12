@@ -535,7 +535,10 @@ mod tests {
 
         // Verify deal status is now Delivered
         let deal = contract.get_deal(deal_id).expect("Deal should exist");
-        assert_eq!(deal.status, "Delivered", "Deal should be Delivered after first confirm");
+        assert_eq!(
+            deal.status, "Delivered",
+            "Deal should be Delivered after first confirm"
+        );
         assert!(deal.qr_consumed, "QR should be consumed");
 
         // Second confirm should panic - either ERR_REPLAYED_QR (consumed) or ERR_BAD_STATUS (not Funded)
@@ -543,10 +546,7 @@ mod tests {
             let _ = contract.confirm_delivery(deal_id, qr_preimage.clone());
         }));
 
-        assert!(
-            result.is_err(),
-            "Second confirm should panic"
-        );
+        assert!(result.is_err(), "Second confirm should panic");
     }
 
     // =========================================================================
