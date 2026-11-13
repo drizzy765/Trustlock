@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { contractId, usdcToken, network, agentUrl } from "@/lib/config";
 import { initNear, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal, createDeal } from "@/lib/near";
-import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, type Mode, type Quote } from "@/lib/quote";
+import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, isQuoteExpired, type Mode, type Quote } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
 import Link from "next/link";
@@ -214,8 +214,8 @@ export default function PayDealPage() {
       setDraft(data as Draft);
       setPending(readPending(data.deal_id));
       const storedQuote = (data as Draft).agent_metadata?.intents_quote ?? null;
-      if (storedQuote?.signature_verified) {
-        // A quote is reusable until it expires; it carries a quote id, never a tx hash.
+      if (storedQuote?.signature_verified && !isQuoteExpired(storedQuote)) {
+        // Reuse only an unexpired quote; it carries a quote id, never a tx hash.
         setQuote(storedQuote);
         setQuoteError(null);
       } else {
@@ -630,7 +630,7 @@ export default function PayDealPage() {
               )}
               <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>
                 Quote {shortQuoteId(quote.quote_id)} · 1Click signature verified ·{" "}
-                {quote.expired
+                {isQuoteExpired(quote)
                   ? "expired"
                   : `good until ${quote.deadline ? new Date(quote.deadline).toLocaleTimeString() : "shortly"}`}
               </p>

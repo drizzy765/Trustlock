@@ -72,14 +72,21 @@ export function displayMode(quote: Quote | null, fallback: Mode): Mode {
   return fallback === "live" ? "demo" : fallback;
 }
 
-/** An amount is renderable only after the server verified the 1Click signature. */
-export function verifiedAmount(quote: Quote | null): string | null {
-  if (!quote?.signature_verified || quote.expired) return null;
+/** Expired unless the quote carries a valid deadline in the future. */
+export function isQuoteExpired(quote: Quote | null, now = Date.now()): boolean {
+  if (!quote?.deadline) return true;
+  const deadline = Date.parse(quote.deadline);
+  return !Number.isFinite(deadline) || deadline <= now;
+}
+
+/** An amount is renderable only after verification and before the deadline. */
+export function verifiedAmount(quote: Quote | null, now = Date.now()): string | null {
+  if (!quote?.signature_verified || isQuoteExpired(quote, now)) return null;
   return quote.amount_out_formatted ?? null;
 }
 
-export function usableQuote(quote: Quote | null): quote is Quote {
-  return Boolean(quote?.signature_verified && !quote.expired);
+export function usableQuote(quote: Quote | null, now = Date.now()): quote is Quote {
+  return Boolean(quote?.signature_verified && !isQuoteExpired(quote, now));
 }
 
 export function shortQuoteId(id: string): string {
