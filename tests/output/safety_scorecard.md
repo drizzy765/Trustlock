@@ -22,8 +22,12 @@ Control case: a screenshot that matches its bank alert is still `CONFIRMED` (`te
 | ID | Result | Why |
 | --- | --- | --- |
 | S01–S07 | NOT RUN, blocked | The near-workspaces specs are in `contract/tests/spec.disabled/` and were taken out of the default run (commits `8b74a48`, `8dbe79f`). Owner: Timi (contract unit-test and near-workspaces issues). |
-| I01 | NOT RUN | No dry 1Click quote was executed for this report. |
+| I01 | PASS (2026-11-13) | Real `POST /v0/quote` with `dry: true`; verified quote id stored on the draft; no tx hash. `tests/output/intents_dry_run.log`, `tests/output/intents_dry_run_http.log`, `docs/intents_dry_run.md`, `tests/test_agent_intents.py::test_i01_*`. |
+| I03 | PASS (2026-11-13) | Tampered quote bytes (amounts, recipient, origin, timestamp, signature) rejected with 502 `ERR_BAD_QUOTE_SIGNATURE` before any amount is returned; quotes that pass signature verification but carry different swap/route/type terms are rejected with `ERR_QUOTE_MISMATCH`. `tests/test_agent_intents.py::test_i03_*`, `::test_a_valid_signature_for_different_terms_is_refused`. |
+| I02 | NOT RUN | Live execute is the separate optional mainnet issue. `/intents/execute` returns 501 when live; the UI cannot render `live` without `executed: true` and a real hash. |
+
+Latest agent suite after the Intents work: 219 passed, 0 failed (2026-11-13).
 
 ## Pass bar for the video
 
-Not met yet. A01 and A02 pass, but S01–S07 and I01 have not been run. Do not record the demo on this scorecard alone.
+Not met yet. A01 and A02 pass, and I01/I03 now pass, but S01–S07 have not been run. Do not record the demo on this scorecard alone.

@@ -96,6 +96,7 @@ See https://docs.near.org/protocol/accounts-contracts/access-keys
 - Optional partner JWT: https://partners.near-intents.org (this URL is an auth wall, not public docs)
 - HACKATHON.md Q-007: there is **no** Intents testnet. Practice with dry quotes; live execution is real mainnet and must stay tiny
 - Verify quote signatures before showing an amount to a user (Penstock pattern)
+- The agent returns a verified **quote id** (base58 hash of the signed payload), never a transaction hash, for dry quotes. Live quotes are capped at 0.50 USDC; execution is a separate optional issue
 
 Escrow holds USDC on NEAR (NEP-141). Intents may take the buyer's asset on another chain; that is the "pay from anywhere" story.
 

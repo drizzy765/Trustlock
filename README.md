@@ -33,7 +33,7 @@ The confirmed end-to-end product flow (actors, sequence, state machine, built vs
 | Release trigger | LLM `attest` on free text | Rider scans a one-time buyer-signed QR |
 | Payment check | none visible | Deterministic receipt check for naira funding; not a bank verification integration |
 | Chain | NEAR + testnet only | Target: testnet proof first; tiny mainnet USDC via 1Click only if safely completed |
-| Intents | `dry: true` quotes | Target: quote, verify signature, execute |
+| Intents | `dry: true` quotes | Real signed dry quotes verified before display; live execute is a separate optional step |
 | Languages | English | Pidgin, Yoruba, English, voice notes |
 | Injection demo | not visible | Fake-receipt prompt injection should not authorize funding |
 
@@ -154,19 +154,33 @@ npm run dev
 ```
 
 The buyer pay, rider scan, and seller dashboard pages exist with wallet
-selector integration. Connect a testnet wallet to see the UI. Mode badges show
-**demo / dry / live** status, default to **demo**, and money buttons stay
-disabled in demo mode. The escrow flow itself is proven on testnet through
+selector integration. Connect a testnet wallet to see the UI. Mode badges are
+read-only and come from the backend (`/health`): **demo / dry / live**. `live` is
+only rendered when a real execute produced a transaction hash, and there is no
+dropdown that can select it. The escrow flow itself is proven on testnet through
 direct contract calls (links in Status above). End-to-end wiring through the
 browser (draft → pay → scan) is still in progress until the #25 fix PR merges —
 do not treat a UI click as on-chain proof yet.
 
 ### 5. Intents quote (optional JWT)
 
-The current `/intents/quote` and `/intents/execute` are stubs; they do not
-contact 1Click or broadcast a transaction. Wire quote verification first.
-Only enable live execution after the implementation and safety checks are
-complete. There is no Intents testnet (HACKATHON.md Q-007).
+`POST /intents/quote` now sends a real `dry: true` request to
+`https://1click.chaindefuser.com/v0/quote`, verifies the ed25519 signature with
+1Click's published manager key, and returns a **quote id** (the base58 hash of the
+signed payload). It never returns a transaction hash. `/pay` renders an amount
+only after that verification; tampered bytes are rejected first (benchmark I03).
+A recorded live dry run is in [docs/intents_dry_run.md](docs/intents_dry_run.md)
+and `tests/output/intents_dry_run.log`.
+
+`POST /intents/execute` is rejected with `409 ERR_NOT_LIVE` unless
+`TRUSTLOCK_INTENTS_MODE=live`; in live mode this build returns `501
+ERR_LIVE_NOT_WIRED`. A tiny mainnet execute is a separate optional issue.
+Amounts are capped at 0.50 USDC live (well under $1). There is no Intents
+testnet (HACKATHON.md Q-007), so the repo stays testnet-only for the escrow.
+
+Set the optional partner JWT as `ONECLICK_JWT` in the environment only; it is
+never committed or logged, and it is sent only when `ONECLICK_API_URL` is HTTPS.
+Full request/response shapes: [docs/api.md](docs/api.md).
 
 ### 6. Demo video and X post
 

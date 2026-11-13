@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { initNear, getAccountId, signIn } from "@/lib/near";
 import { agentUrl } from "@/lib/config";
+import { fetchHealth, type Mode } from "@/lib/quote";
+import ModeBadge from "@/components/ModeBadge";
 
 interface DraftResult {
   draftId: number;
@@ -19,7 +21,7 @@ export default function SellerOnboardPage() {
   const [buyerAccount, setBuyerAccount] = useState("");
   const [riderAccount, setRiderAccount] = useState("");
   const [deadlineHours, setDeadlineHours] = useState("24");
-  const [mode, setMode] = useState<"demo" | "dry" | "live">("demo");
+  const [mode, setMode] = useState<Mode>("demo");
   const [isCreating, setIsCreating] = useState(false);
   const [createdDraft, setCreatedDraft] = useState<DraftResult | null>(null);
   const [shareableLink, setShareableLink] = useState("");
@@ -30,6 +32,9 @@ export default function SellerOnboardPage() {
       setAccountId(getAccountId());
       setIsLoading(false);
     });
+    fetchHealth().then((health) => {
+      if (health?.mode) setMode(health.mode);
+    });
   }, []);
 
   async function handleConnect() {
@@ -37,7 +42,8 @@ export default function SellerOnboardPage() {
   }
 
   async function handleCreateDraft() {
-    if (!item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || !accountId || mode === "demo") return;
+    // A draft is unsigned and moves no money, so it is allowed in every mode.
+    if (!item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || !accountId) return;
     const price = parseInt(priceNgn, 10);
     if (!Number.isInteger(price) || price <= 0) {
       setError("Enter a valid price in NGN.");
@@ -100,24 +106,10 @@ export default function SellerOnboardPage() {
         </Link>
       </div>
 
-      {/* Mode Selector */}
+      {/* App mode label. Read-only: no one can select live from a dropdown. */}
       <div style={{ marginBottom: 24, display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-        <span style={{ fontSize: 12, color: "#888" }}>Mode:</span>
-        <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value as "demo" | "dry" | "live")}
-          style={{
-            padding: "4px 8px",
-            background: "#1a1a1a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 4
-          }}
-        >
-          <option value="demo">demo</option>
-          <option value="dry">dry</option>
-          <option value="live">live</option>
-        </select>
+        <span style={{ fontSize: 12, color: "#888" }}>App mode:</span>
+        <ModeBadge mode={mode} />
       </div>
 
       {/* Wallet Connection */}
