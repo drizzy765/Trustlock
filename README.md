@@ -153,10 +153,13 @@ npm install
 npm run dev
 ```
 
-The buyer pay, rider scan, and seller dashboard pages are complete with wallet
-selector integration. Connect a testnet wallet to see the UI. The pages are
-wired to the deployed contract (`trustlock-timi.testnet`). Mode badges show
-**demo / dry / live** status.
+The buyer pay, rider scan, and seller dashboard pages exist with wallet
+selector integration. Connect a testnet wallet to see the UI. Mode badges show
+**demo / dry / live** status, default to **demo**, and money buttons stay
+disabled in demo mode. The escrow flow itself is proven on testnet through
+direct contract calls (links in Status above). End-to-end wiring through the
+browser (draft → pay → scan) is still in progress until the #25 fix PR merges —
+do not treat a UI click as on-chain proof yet.
 
 ### 5. Intents quote (optional JWT)
 
