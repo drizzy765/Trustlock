@@ -55,22 +55,48 @@ Expected output:
 
 ## Rider Key Setup
 
-⚠️ **REQUIRED:** Add restricted function-call key to rider account
+⚠️ **REQUIRED:** Add restricted function-call key to rider account.
+Use the documented scripts (near-cli-rs, not the legacy JS CLI) — see
+`scripts/add-rider-key.ps1` / `scripts/add-rider-key.sh` for the exact commands.
 
 ```powershell
-# Generate key (if not already done)
-near generate-key rider-timi.testnet
+# Recommended: the keypair is created on the rider device; only the PUBLIC key is supplied here.
+.\scripts\add-rider-key.ps1 -PublicKey ed25519:REPLACE_WITH_RIDER_PUBLIC_KEY
 
-# Get the public key
-near keys rider-timi.testnet
-
-# Add restricted key - REPLACE <PUBLIC_KEY> with actual key from above
-near add-key rider-timi.testnet <PUBLIC_KEY> `
-  --allowance 0.25 `
-  --receiverId trustlock-timi.testnet `
-  --methodNames confirm_delivery `
-  --accountId rider-timi.testnet
+# Demo fallback: generate on this machine (private key stays in your OS keychain, never in git).
+.\scripts\add-rider-key.ps1 -Generate
 ```
+
+Under the hood the script runs (exact near-cli-rs syntax):
+
+```powershell
+near account add-key rider-timi.testnet `
+  grant-function-call-access `
+    --allowance '0.25 NEAR' `
+    --contract-account-id trustlock-timi.testnet `
+    --function-names confirm_delivery `
+  use-manually-provided-public-key ed25519:REPLACE_WITH_RIDER_PUBLIC_KEY `
+  network-config testnet `
+  sign-with-keychain `
+  send
+```
+
+Then it verifies (read-only) that the key is confined:
+
+```powershell
+near account list-keys rider-timi.testnet network-config testnet now
+# Expected row for the new key (key value differs per run):
+# | ed25519:... | <nonce> | only do ["confirm_delivery"] function calls
+#                  on trustlock-timi.testnet with an allowance of 0.250 NEAR |
+```
+
+Reference: one key with exactly this permission was already added by hand
+(tx `AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1VE`) and confirmed live via
+`view_access_key_list` on `rider-timi.testnet` (block 277532777):
+public key `ed25519:FsaTX1yvCRyMRkasgrbEAhRSeY5AqUqBYd2p7ebynaNy`,
+`FunctionCall: { allowance: "250000000000000000000000" (= 0.25 NEAR),
+method_names: ["confirm_delivery"], receiver_id: "trustlock-timi.testnet" }`.
+New keys must match exactly this shape.
 
 ## Environment Variables
 
