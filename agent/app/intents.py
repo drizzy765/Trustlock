@@ -308,7 +308,19 @@ def verify_quote(response: Any) -> str:
 def _assert_echo(response: dict[str, Any], request: dict[str, Any]) -> None:
     """A signed quote is only usable if it is the quote we asked for."""
     quote_request = response.get("quoteRequest") or {}
-    for field in ("dry", "originAsset", "destinationAsset", "amount", "recipient", "refundTo"):
+    for field in (
+        "dry",
+        "swapType",
+        "slippageTolerance",
+        "originAsset",
+        "depositType",
+        "destinationAsset",
+        "amount",
+        "refundTo",
+        "refundType",
+        "recipient",
+        "recipientType",
+    ):
         if quote_request.get(field) != request.get(field):
             raise IntentsError(
                 502,

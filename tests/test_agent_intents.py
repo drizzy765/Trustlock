@@ -201,6 +201,34 @@ def test_a_valid_signature_for_another_request_is_refused(monkeypatch):
     assert "amount_out" not in response.json()
 
 
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("swapType", "EXACT_OUTPUT"),
+        ("slippageTolerance", 500),
+        ("depositType", "DESTINATION_CHAIN"),
+        ("recipientType", "ACCOUNT"),
+        ("refundType", "INTENTS"),
+    ],
+)
+def test_a_valid_signature_for_different_terms_is_refused(monkeypatch, field, value):
+    """After signature verification, a quote whose terms differ from our request is still refused."""
+    payload = copy.deepcopy(FIXTURE)
+    payload["quoteRequest"][field] = value
+    monkeypatch.setattr(intents, "_client", _client(_handler(payload=payload)))
+    # Bypass the verifier here: this test isolates the post-verification echo check.
+    monkeypatch.setattr(intents, "verify_quote", lambda payload: QUOTE_ID)
+    deal_id = _draft()
+
+    response = client.post("/intents/quote", json={"deal_id": deal_id})
+    assert response.status_code == 502
+    body = response.json()
+    assert body["error"] == "ERR_QUOTE_MISMATCH"
+    assert "amount_out" not in body and "amountOut" not in response.text
+    draft = client.get(f"/deals/{deal_id}").json()
+    assert draft["agent_metadata"]["intents_quote"] is None
+
+
 def test_partner_jwt_is_optional_and_never_leaks(monkeypatch):
     calls = []
     monkeypatch.setattr(intents, "_client", _client(_handler(calls=calls)))
