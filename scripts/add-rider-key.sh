@@ -3,7 +3,7 @@
 #
 # Attaches a function-call access key on the rider account that can ONLY call
 # `confirm_delivery` on the escrow contract, with a 0.25 NEAR allowance.
-# Matches the hand-added key (tx AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1VE):
+# Matches the hand-added key (tx AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1fVE):
 #   permission.FunctionCall = { allowance: "250000000000000000000000",
 #                               method_names: ["confirm_delivery"],
 #                               receiver_id: "trustlock-timi.testnet" }

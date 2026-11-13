@@ -91,7 +91,7 @@ near account list-keys rider-timi.testnet network-config testnet now
 ```
 
 Reference: one key with exactly this permission was already added by hand
-(tx `AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1VE`) and confirmed live via
+(tx `AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1fVE`) and confirmed live via
 `view_access_key_list` on `rider-timi.testnet` (block 277532777):
 public key `ed25519:FsaTX1yvCRyMRkasgrbEAhRSeY5AqUqBYd2p7ebynaNy`,
 `FunctionCall: { allowance: "250000000000000000000000" (= 0.25 NEAR),
