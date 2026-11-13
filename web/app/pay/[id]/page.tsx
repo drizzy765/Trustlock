@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { contractId, usdcToken, network, agentUrl } from "@/lib/config";
 import { initNear, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal, createDeal } from "@/lib/near";
-import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, isQuoteExpired, type Mode, type Quote } from "@/lib/quote";
+import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, isQuoteExpired, quoteDeadlineMs, type Mode, type Quote } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
 import Link from "next/link";
@@ -153,6 +153,7 @@ export default function PayDealPage() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [agentMode, setAgentMode] = useState<Mode>("demo");
+  const [quoteNow, setQuoteNow] = useState(() => Date.now());
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
   /** Fetch a fresh verified quote for this draft. Amounts render only on success. */
@@ -250,6 +251,22 @@ export default function PayDealPage() {
       if (health?.intents_mode) setAgentMode(health.intents_mode);
     });
   }, []);
+
+  // Re-render when the displayed quote reaches its deadline.
+  useEffect(() => {
+    setQuoteNow(Date.now());
+
+    if (!quote?.signature_verified) return;
+
+    const deadline = quoteDeadlineMs(quote);
+    if (deadline === null) return;
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+
+    const timer = window.setTimeout(() => setQuoteNow(Date.now()), remaining + 1);
+    return () => window.clearTimeout(timer);
+  }, [quote]);
 
   // Focus the confirm button when the modal opens; Escape closes it.
   useEffect(() => {
@@ -447,6 +464,8 @@ export default function PayDealPage() {
   const hasStoredSecret = secret === null && availableSecret !== null;
   const canCreateAndFund =
     draft !== null && !legacy && draft.onchain_deal_id == null && !buyerMismatch;
+  const quoteAmount = verifiedAmount(quote, quoteNow);
+  const quoteExpired = isQuoteExpired(quote, quoteNow);
 
   if (isLoading) {
     return (
@@ -617,11 +636,11 @@ export default function PayDealPage() {
             </div>
           ) : quote && quote.signature_verified ? (
             <div>
-              {verifiedAmount(quote) ? (
+              {quoteAmount ? (
                 <p style={{ fontSize: 20, fontWeight: "bold", margin: "4px 0" }}>
                   {quote.amount_in_formatted} USDC on {assetLabel(quote.origin_asset)}
                   {" → "}
-                  {verifiedAmount(quote)} USDC on {assetLabel(quote.destination_asset)}
+                  {quoteAmount} USDC on {assetLabel(quote.destination_asset)}
                 </p>
               ) : (
                 <p style={{ color: "#fbbf24", margin: "4px 0" }}>
@@ -630,7 +649,7 @@ export default function PayDealPage() {
               )}
               <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>
                 Quote {shortQuoteId(quote.quote_id)} · 1Click signature verified ·{" "}
-                {isQuoteExpired(quote)
+                {quoteExpired
                   ? "expired"
                   : `good until ${quote.deadline ? new Date(quote.deadline).toLocaleTimeString() : "shortly"}`}
               </p>
