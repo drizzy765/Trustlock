@@ -5,7 +5,7 @@
 
 mod utils;
 
-// Safety battery tests (S01-S09)
+// Safety battery tests (S01-S09) plus release-path and callback checks.
 mod spec {
     mod s01_happy_path;
     mod s02_double_release;
