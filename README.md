@@ -79,7 +79,8 @@ skills/       local SKILL.md files + verified upstream links
 - ✅ Contract deployed: `trustlock-timi.testnet`
 - ✅ Initialized with USDC: `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`
 - ✅ Test accounts created with Circle Faucet USDC
-- ⏳ E2E flow verification pending
+- ✅ E2E verified on testnet 12 Nov 2026 — rider path (Deal 1, 2.5 USDC): [create](https://explorer.testnet.near.org/transactions/4vn6iQgicNmFdyzxHyxXtahRz3xNQTXXmCpxpmZP5c4U) · [fund](https://explorer.testnet.near.org/transactions/BFv79enPR8TR8UHV5bWn6QqVnnjEErXEVDw9A6n533pt1B) · [confirm](https://explorer.testnet.near.org/transactions/9iXAs65gjPSeB3bhJmatA1KydSGaVjBSXowGZUgzzS); buyer path (Deal 2, 1 USDC): [create](https://explorer.testnet.near.org/transactions/EQSdDmVruBK66ARUJwnugoYKyghsyUMJBj8qpankgYM3) · [confirm](https://explorer.testnet.near.org/transactions/AsUsXzVDm8NWN7SrqnHopYMEcPCg8W3DRALRY6FuqeJf). Safety checks rejected as designed: [replayed QR](https://explorer.testnet.near.org/transactions/AS7csncmuzm5Q76wiMZ27dzfnuXmWvHsvnMdkvzPwuo) (`ERR_BAD_STATUS`), [wrong rider](https://explorer.testnet.near.org/transactions/E4AsubKszhHqB3wwsy7UVsPP4cPsbQTiRqZJGe2vr9b2) (`ERR_NOT_RIDER`). Full log: [docs/testnet_run.md](docs/testnet_run.md).
+- ⏳ Deal 3 timeout refund (0.5 USDC, deadline 13 Nov 23:35 UTC) — pending at time of writing
 - ⏳ Demo video pending
 
 ## Judge path (do X, then you will see Y)
@@ -98,11 +99,11 @@ rustup show
 cargo test -q
 ```
 
-Run the current contract tests, but note that the checked-in suite is not yet a complete state-machine or token-transfer integration suite. Do not infer the full flow is proven until the added unit and sandbox tests cover it.
+The checked-in suite covers the full state machine (`Created → Funded → Released | Refunded | Disputed`) — 21 unit tests including every panic path, green via `cargo test -q`. Near-workspaces integration specs exist under `contract/tests/` but are currently disabled; the on-chain run below is the end-to-end proof.
 
-### 2. Testnet E2E (ready to run)
+### 2. Testnet E2E (already executed — see links; re-run to reproduce)
 
-The contract is deployed and initialized on testnet. Run the E2E flow:
+The contract is deployed and initialized on testnet. This exact flow already ran on 12 Nov 2026 — full log with explorer links in [docs/testnet_run.md](docs/testnet_run.md). Re-run the same steps to reproduce:
 
 ```powershell
 # 1. Create deal
@@ -152,10 +153,13 @@ npm install
 npm run dev
 ```
 
-The buyer pay, rider scan, and seller dashboard pages are complete with wallet
-selector integration. Connect a testnet wallet to see the UI. The pages are
-wired to the deployed contract (`trustlock-timi.testnet`). Mode badges show
-**demo / dry / live** status.
+The buyer pay, rider scan, and seller dashboard pages exist with wallet
+selector integration. Connect a testnet wallet to see the UI. Mode badges show
+**demo / dry / live** status, default to **demo**, and money buttons stay
+disabled in demo mode. The escrow flow itself is proven on testnet through
+direct contract calls (links in Status above). End-to-end wiring through the
+browser (draft → pay → scan) is still in progress until the #25 fix PR merges —
+do not treat a UI click as on-chain proof yet.
 
 ### 5. Intents quote (optional JWT)
 
