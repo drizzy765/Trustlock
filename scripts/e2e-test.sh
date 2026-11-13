@@ -4,7 +4,7 @@
 
 set -e
 
-CONTRACT="trustlock-timi.testnet"
+CONTRACT="trustlock-v2-timi.testnet"
 TOKEN="3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af"
 BUYER="buyer-timi.testnet"
 SELLER="seller-timi.testnet"

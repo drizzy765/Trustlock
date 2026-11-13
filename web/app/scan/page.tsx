@@ -330,7 +330,7 @@ export default function ScanPage() {
         </p>
         <p style={{ margin: 0 }}>
           Network: {mode === "demo" ? "demo (no blockchain)" : "testnet"} | 
-          Contract: trustlock-timi.testnet
+          Contract: trustlock-v2-timi.testnet
         </p>
       </div>
     </main>

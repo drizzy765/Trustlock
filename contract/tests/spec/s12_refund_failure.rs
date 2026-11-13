@@ -1,13 +1,9 @@
-//! S12: Refund Transfer Failure.
+//! S12: Refund Transfer Failure Retry.
 //!
 //! Setup: The mock token fails the timeout refund transfer, then recovers.
-//! Expected: After the failed refund the deal stays `Expired` with funds
-//! preserved (no loss, no double refund).
-//!
-//! Known limitation (no contract change in #6): `claim_timeout_refund_for`
-//! only accepts `Funded`, so the retry the callback preserves `Expired` for
-//! cannot run today -- the retry attempt below documents `ERR_BAD_STATUS`.
-//! Retry support belongs with `resolve_dispute` (#18).
+//! Expected: After the failed refund the deal is back to `Funded` with funds
+//! preserved (no loss, no double refund); retrying `claim_timeout_refund_for`
+//! reaches `Refunded` and the payer is made whole.
 
 use crate::utils::*;
 
@@ -21,7 +17,7 @@ async fn s12_refund_transfer_failure() -> anyhow::Result<()> {
     let buyer = worker.dev_create_account().await?;
 
     let ft = deploy_mock_ft(&worker, &ft_owner).await?;
-    let escrow = deploy_trustlock(&worker, ft.id()).await?;
+    let escrow = deploy_trustlock(&worker, ft.id(), ft_owner.id()).await?;
 
     for account in [&seller, &buyer, escrow.as_account()] {
         register_storage(&ft, account).await?;
@@ -108,22 +104,24 @@ async fn s12_refund_transfer_failure() -> anyhow::Result<()> {
     }
     assert!(triggered, "Refund never triggered");
 
-    // on_refund kept Expired: funds preserved, nobody double-paid.
+    // on_refund restored Funded: funds preserved, nobody double-paid.
     // (buyer was refunded for deal 1 earlier, so it holds 10M - price now.)
-    assert_eq!(get_deal(&escrow, deal_2).await?.status, "Expired");
+    assert_eq!(get_deal(&escrow, deal_2).await?.status, "Funded");
     assert_eq!(ft_balance_of(&ft, escrow.id()).await?, price);
     assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000 - price);
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 
-    // Retry is rejected today: the claim entry only accepts Funded.
-    let retry = claim_timeout_refund(&escrow, &buyer, deal_2).await?;
-    assert!(retry.is_failure(), "Retry on Expired must fail today");
-    let error = format!("{:?}", retry.into_result().unwrap_err());
-    assert!(
-        error.contains("ERR_BAD_STATUS"),
-        "Expected ERR_BAD_STATUS documenting the retry gap, got: {}",
-        error
-    );
+    // Retry with a healthy token: the refund goes through this time.
+    claim_timeout_refund(&escrow, &buyer, deal_2)
+        .await?
+        .into_result()?;
+
+    let deal = get_deal(&escrow, deal_2).await?;
+    assert_eq!(deal.status, "Refunded");
+    // Payer whole, escrow empty, seller untouched: no loss, no double refund.
+    assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000);
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 
     Ok(())
 }

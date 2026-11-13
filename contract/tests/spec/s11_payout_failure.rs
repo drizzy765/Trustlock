@@ -17,7 +17,7 @@ async fn s11_payout_transfer_failure_retry() -> anyhow::Result<()> {
     let buyer = worker.dev_create_account().await?;
 
     let ft = deploy_mock_ft(&worker, &ft_owner).await?;
-    let escrow = deploy_trustlock(&worker, ft.id()).await?;
+    let escrow = deploy_trustlock(&worker, ft.id(), ft_owner.id()).await?;
 
     for account in [&seller, &buyer, escrow.as_account()] {
         register_storage(&ft, account).await?;
@@ -62,27 +62,19 @@ async fn s11_payout_transfer_failure_retry() -> anyhow::Result<()> {
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
     assert_eq!(ft_balance_of(&ft, escrow.id()).await?, price);
 
-    // Retry with a healthy token: blocked by a contract gap. on_payout
-    // restores Funded and frees the QR, but the used_qr entry is never
-    // cleared, so the same QR is rejected as ERR_REPLAYED_QR. Retrying with a
-    // fresh deal/QR (or a contract fix clearing used_qr on payout failure,
-    // see #18) is required for release.
-    let retry = confirm_delivery(&escrow, &rider, deal_id, &preimage).await?;
-    assert!(
-        retry.is_failure(),
-        "Retry with consumed QR record must fail"
-    );
-    let error = format!("{:?}", retry.into_result().unwrap_err());
-    assert!(
-        error.contains("ERR_REPLAYED_QR"),
-        "Expected ERR_REPLAYED_QR documenting the retry gap, got: {}",
-        error
-    );
+    // Retry with a healthy token: the failed payout cleared the used-QR mark,
+    // so the same QR scans again and the deal reaches Released.
+    confirm_delivery(&escrow, &rider, deal_id, &preimage)
+        .await?
+        .into_result()?;
 
-    // State is still safe: still Funded, seller unpaid, escrow holds funds.
-    assert_eq!(get_deal(&escrow, deal_id).await?.status, "Funded");
-    assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
-    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, price);
+    let deal = get_deal(&escrow, deal_id).await?;
+    assert_eq!(deal.status, "Released");
+    assert!(deal.qr_consumed);
+    // Paid exactly once: no loss, no double pay.
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, price);
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
+    assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000 - price);
 
     Ok(())
 }

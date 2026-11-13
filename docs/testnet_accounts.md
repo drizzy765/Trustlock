@@ -4,7 +4,17 @@
 
 **Contract ID:** `trustlock-v2-timi.testnet`  
 **Network:** NEAR Testnet  
+**Contract ID:** `trustlock-v2-timi.testnet`  
+**Network:** NEAR Testnet  
 **Status:** ✅ **DEPLOYED AND INITIALIZED**
+
+v2 adds: payout/refund retry restore, owner-or-arbiter `resolve_dispute`,
+buyer `claim_dispute_timeout_refund` after `DISPUTE_WINDOW_MS` (7 days),
+`disputed_at_ms` tracking, and the `sha256_hex` rename. No state was
+migrated: v1 (`trustlock-timi.testnet`) and its recorded tx hashes stay as
+history below. The on-chain code was verified byte-identical to this branch
+(sha256 matches code hash `HbubgDJrKngoPvYz76qGJDA3b6kBiDCGjY1zrSKz44hS`),
+so no redeploy was needed.
 
 ### Deployment + init (single `with-init-call new` transaction)
 
@@ -30,7 +40,7 @@ Deals 1–3 live here. Kept for history; new deals go to v2.
 
 **Contract ID:** `trustlock-timi.testnet`  
 **Network:** NEAR Testnet  
-**Status:** ✅ **DEPLOYED AND INITIALIZED**
+**Status:** ✅ **DEPLOYED AND INITIALIZED** (kept as history; Phase 2 runs on v2)
 
 ### Deployment
 - **Transaction:** https://testnet.nearblocks.io/txns/FNM2Jp6aCCFa6BR719SxACjpRGmY9gc8VQcbj8brTHgo
@@ -99,7 +109,7 @@ Under the hood the script runs (exact near-cli-rs syntax):
 near account add-key rider-timi.testnet `
   grant-function-call-access `
     --allowance '0.25 NEAR' `
-    --contract-account-id trustlock-timi.testnet `
+    --contract-account-id trustlock-v2-timi.testnet `
     --function-names confirm_delivery `
   use-manually-provided-public-key ed25519:REPLACE_WITH_RIDER_PUBLIC_KEY `
   network-config testnet `
@@ -113,16 +123,17 @@ Then it verifies (read-only) that the key is confined:
 near account list-keys rider-timi.testnet network-config testnet now
 # Expected row for the new key (key value differs per run):
 # | ed25519:... | <nonce> | only do ["confirm_delivery"] function calls
-#                  on trustlock-timi.testnet with an allowance of 0.250 NEAR |
+#                  on trustlock-v2-timi.testnet with an allowance of 0.250 NEAR |
 ```
 
-Reference: one key with exactly this permission was already added by hand
-(tx `AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1fVE`) and confirmed live via
+Reference (v1): a key with exactly this permission shape was added by hand
+(tx `AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1VE`) and confirmed live via
 `view_access_key_list` on `rider-timi.testnet` (block 277532777):
 public key `ed25519:FsaTX1yvCRyMRkasgrbEAhRSeY5AqUqBYd2p7ebynaNy`,
 `FunctionCall: { allowance: "250000000000000000000000" (= 0.25 NEAR),
 method_names: ["confirm_delivery"], receiver_id: "trustlock-timi.testnet" }`.
-New keys must match exactly this shape.
+New v2 keys must match exactly this shape with the v2 receiver (keys are
+receiver-bound, so v1 keys do not carry over).
 
 ## Environment Variables
 
@@ -133,8 +144,8 @@ Update your `.env` file (copy from `.env.example`):
 NEAR_NETWORK=testnet
 NEAR_NODE_URL=https://rpc.testnet.near.org
 
-# Contract - DEPLOYED AND INITIALIZED
-TRUSTLOCK_CONTRACT_ID=trustlock-timi.testnet
+# Contract v2 - deployed (see "Deployed Contract (v2)" above)
+TRUSTLOCK_CONTRACT_ID=trustlock-v2-timi.testnet
 TRUSTLOCK_USDC_ACCOUNT=3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af
 
 # Accounts (your testnet accounts)
@@ -145,7 +156,7 @@ TRUSTLOCK_RIDER_ACCOUNT=rider-timi.testnet
 
 # Frontend
 NEXT_PUBLIC_AGENT_URL=http://localhost:8080
-NEXT_PUBLIC_CONTRACT_ID=trustlock-timi.testnet
+NEXT_PUBLIC_CONTRACT_ID=trustlock-v2-timi.testnet
 NEXT_PUBLIC_USDC_CONTRACT=3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af
 NEXT_PUBLIC_NETWORK=testnet
 NEXT_PUBLIC_APP_MODE=demo

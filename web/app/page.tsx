@@ -131,7 +131,7 @@ export default function HomePage() {
           <span>Connect wallet to start</span>
         )}
         <br /><br />
-        <strong>Contract:</strong> trustlock-timi.testnet (testnet) | 
+        <strong>Contract:</strong> trustlock-v2-timi.testnet (testnet) | 
         <strong> Mode badge:</strong> demo / dry / live (live only after a real execute)
       </div>
     </main>
