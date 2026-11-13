@@ -112,3 +112,24 @@ export async function confirmDelivery(dealId: number, qrPreimageHex: string) {
     "0"
   );
 }
+
+export async function fundDeal(dealId: number, amount: string, usdcContractId: string) {
+  if (!wallet) await initNear();
+  if (!wallet) throw new Error("Wallet not initialized");
+  
+  const account = wallet.account();
+  
+  // Call ft_transfer_call on USDC token contract
+  // msg is the plain deal_id string (e.g., "1"), NOT JSON
+  return account.functionCall({
+    contractId: usdcContractId,
+    methodName: "ft_transfer_call",
+    args: {
+      receiver_id: contractId,
+      amount: amount,
+      msg: dealId.toString()
+    },
+    gas: "50000000000000", // 50 Tgas
+    attachedDeposit: "1" // 1 yoctoNEAR required by NEP-141
+  });
+}
