@@ -179,7 +179,8 @@ Amounts are capped at 0.50 USDC live (well under $1). There is no Intents
 testnet (HACKATHON.md Q-007), so the repo stays testnet-only for the escrow.
 
 Set the optional partner JWT as `ONECLICK_JWT` in the environment only; it is
-never committed or logged. Full request/response shapes: [docs/api.md](docs/api.md).
+never committed or logged, and it is sent only when `ONECLICK_API_URL` is HTTPS.
+Full request/response shapes: [docs/api.md](docs/api.md).
 
 ### 6. Demo video and X post
 

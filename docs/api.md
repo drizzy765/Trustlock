@@ -199,13 +199,16 @@ dry quotes because 1Click does not return one without `dry: false`.
 
 Errors: 400 `ERR_INVALID_AMOUNT`, `ERR_AMOUNT_TOO_LARGE`; 404 `ERR_DEAL_NOT_FOUND`;
 502 `ERR_BAD_QUOTE_SIGNATURE`, `ERR_QUOTE_MISMATCH`, `ERR_INTENTS_UPSTREAM`;
-503 `ERR_INTENTS_CONFIG` (live without real addresses). `ERR_QUOTE_MISMATCH` means the
+503 `ERR_INTENTS_CONFIG` (live without real addresses, or a non-HTTPS
+`ONECLICK_API_URL` while `ONECLICK_JWT` is set). `ERR_QUOTE_MISMATCH` means the
 signed quote's request fields (route, amount, recipient/refund address, swap/deposit/
 recipient/refund type) do not match this call. A rejected quote never includes an
 amount or a hash.
 
 Optional partner JWT: `ONECLICK_JWT` from the environment only. It is sent as
-`Authorization: Bearer …`, never committed, logged, or returned.
+`Authorization: Bearer …`, never committed, logged, or returned. A non-HTTPS
+`ONECLICK_API_URL` is rejected with 503 `ERR_INTENTS_CONFIG` before the token is
+attached; plain HTTP is allowed only when no JWT is set.
 
 ## `POST /intents/execute`
 

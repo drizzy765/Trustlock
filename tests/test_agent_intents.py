@@ -245,6 +245,55 @@ def test_partner_jwt_is_optional_and_never_leaks(monkeypatch):
     assert JWT not in client.get("/health").text
 
 
+def test_jwt_is_refused_over_plain_http(monkeypatch):
+    monkeypatch.setenv("ONECLICK_API_URL", "http://1click.example.test")
+    monkeypatch.setenv("ONECLICK_JWT", JWT)
+
+    def no_client():
+        raise AssertionError("an insecure JWT quote must not create an HTTP client")
+
+    monkeypatch.setattr(intents, "_client", no_client)
+    response = client.post("/intents/quote", json={"amount": "2500000"})
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "ERR_INTENTS_CONFIG"
+    assert JWT not in response.text
+
+
+def test_plain_http_is_allowed_without_jwt(monkeypatch):
+    calls = []
+    monkeypatch.setenv("ONECLICK_API_URL", "http://1click.example.test")
+    monkeypatch.delenv("ONECLICK_JWT", raising=False)
+    monkeypatch.setattr(intents, "_client", _client(_handler(calls=calls)))
+
+    response = client.post("/intents/quote", json={"amount": "2500000"})
+    assert response.status_code == 200
+    assert calls[0]["url"] == "http://1click.example.test/v0/quote"
+    assert "authorization" not in calls[0]["headers"]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://1click.example.test",
+        "1click.example.test",
+        "https:///v0/quote",
+        "http://[::1",
+    ],
+)
+def test_invalid_api_url_is_refused(monkeypatch, url):
+    monkeypatch.setenv("ONECLICK_API_URL", url)
+    monkeypatch.delenv("ONECLICK_JWT", raising=False)
+
+    def no_client():
+        raise AssertionError("an invalid quote URL must not create an HTTP client")
+
+    monkeypatch.setattr(intents, "_client", no_client)
+    response = client.post("/intents/quote", json={"amount": "2500000"})
+    assert response.status_code == 503
+    assert response.json()["error"] == "ERR_INTENTS_CONFIG"
+
+
 def test_execute_is_rejected_unless_live(monkeypatch):
     deal_id = _draft()
     response = client.post("/intents/execute", json={"deal_id": deal_id})

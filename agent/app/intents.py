@@ -18,6 +18,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from cryptography.exceptions import InvalidSignature
@@ -105,6 +106,27 @@ def mode() -> str:
 
 def api_url() -> str:
     return os.environ.get("ONECLICK_API_URL", DEFAULT_API_URL).strip().rstrip("/") or DEFAULT_API_URL
+
+
+def _validate_api_url(url: str, *, has_credential: bool) -> None:
+    """Refuse a malformed quote endpoint, and never send a JWT over plain HTTP."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        parts = None
+    if parts is None or parts.scheme.lower() not in {"http", "https"} or not parts.netloc:
+        raise IntentsError(
+            503,
+            "ERR_INTENTS_CONFIG",
+            "ONECLICK_API_URL must be an absolute http(s) URL.",
+        )
+    if has_credential and parts.scheme.lower() != "https":
+        raise IntentsError(
+            503,
+            "ERR_INTENTS_CONFIG",
+            "ONECLICK_JWT is set, so ONECLICK_API_URL must use HTTPS; "
+            "refusing to send the token over plain HTTP.",
+        )
 
 
 def manager_key() -> str:
@@ -381,14 +403,19 @@ def quote(amount: str) -> dict[str, Any]:
     if _live():
         _require_live_config()
     request = build_request(str(units))
-    headers = {"Content-Type": "application/json"}
     jwt = os.environ.get("ONECLICK_JWT", "").strip()
+    # Validate before building the Authorization header: a plain-HTTP override
+    # must never receive the partner token.
+    endpoint = f"{api_url()}/v0/quote"
+    _validate_api_url(endpoint, has_credential=bool(jwt))
+
+    headers = {"Content-Type": "application/json"}
     if jwt:
         headers["Authorization"] = f"Bearer {jwt}"
 
     try:
         with _client() as client:
-            response = client.post(f"{api_url()}/v0/quote", json=request, headers=headers)
+            response = client.post(endpoint, json=request, headers=headers)
     except httpx.HTTPError as exc:
         raise IntentsError(
             502,
