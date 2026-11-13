@@ -29,7 +29,7 @@
 #         --allowance '0.25 NEAR' `
 #         --contract-account-id trustlock-timi.testnet `
 #         --function-names confirm_delivery `
-#       autogenerate-new-keypair save-to-keychain `
+#       autogenerate-new-keypair --signature-scheme ed25519 save-to-keychain `
 #       network-config testnet `
 #       sign-with-keychain `
 #       send
@@ -114,7 +114,7 @@ if ($Generate) {
             "--allowance", $Allowance,
             "--contract-account-id", $ContractId,
             "--function-names", $Methods,
-        "autogenerate-new-keypair", "save-to-keychain",
+        "autogenerate-new-keypair", "--signature-scheme", "ed25519", "save-to-keychain",
         "network-config", $Network,
         $SignWith,
         "send")
