@@ -367,7 +367,11 @@ def _summary(response: dict[str, Any], request: dict[str, Any], quote_id: str) -
     """The quote as the API and the UI may show it: flattened, labelled, no tx hash."""
     quote = response.get("quote") or {}
     dry = not _live()
-    deadline = (response.get("quoteRequest") or {}).get("deadline")
+    deadline = (
+        (response.get("quoteRequest") or {}).get("deadline")
+        if dry
+        else quote.get("deadline")
+    )
     return {
         "mode": mode(),
         "dry": dry,

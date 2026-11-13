@@ -195,7 +195,9 @@ Response (dry):
 `quote_id` is the base58 SHA-256 of the signed payload, not a transaction hash. When the
 request names a `deal_id`, the verified summary is stored on that draft and appears in
 `GET /deals/{deal_id}` as `agent_metadata.intents_quote`. `deposit_address` is `null` for
-dry quotes because 1Click does not return one without `dry: false`.
+dry quotes because 1Click does not return one without `dry: false`. For live quotes,
+`deadline` is the signed `quote.deadline`; dry quotes use the signed
+`quoteRequest.deadline` because 1Click omits a quote-level deadline when `dry: true`.
 
 Errors: 400 `ERR_INVALID_AMOUNT`, `ERR_AMOUNT_TOO_LARGE`; 404 `ERR_DEAL_NOT_FOUND`;
 502 `ERR_BAD_QUOTE_SIGNATURE`, `ERR_QUOTE_MISMATCH`, `ERR_INTENTS_UPSTREAM`;

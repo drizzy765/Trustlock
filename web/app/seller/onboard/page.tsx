@@ -278,11 +278,11 @@ export default function SellerOnboardPage() {
           )}
 
           <button
-            disabled={!isConnected || !item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || mode === "demo" || isCreating}
+            disabled={!isConnected || !item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || isCreating}
             onClick={handleCreateDraft}
             style={{
               width: "100%",
-              background: !isConnected || mode === "demo" ? "#444" : "#22c55e",
+              background: !isConnected ? "#444" : "#22c55e",
               color: "#fff",
               border: "none",
               padding: "14px 24px",
@@ -294,19 +294,11 @@ export default function SellerOnboardPage() {
           >
             {!isConnected
               ? "Connect Wallet First"
-              : mode === "demo"
-                ? "Create Draft (demo mode — disabled)"
-                : isCreating
-                  ? "Creating draft..."
-                  : "Create Draft & Generate Payment Link"
+              : isCreating
+                ? "Creating draft..."
+                : "Create Draft & Generate Payment Link"
             }
           </button>
-
-          {mode === "demo" && (
-            <p style={{ color: "#fbbf24", fontSize: 12, marginTop: 8, textAlign: "center" }}>
-              Switch out of demo mode to create a shareable draft
-            </p>
-          )}
         </div>
       ) : (
         /* Shareable Link Generated */

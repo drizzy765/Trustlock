@@ -108,6 +108,8 @@ def test_i01_dry_quote_forwards_dry_true_and_stores_a_quote_id(monkeypatch):
     assert body["deposit_address"] is None
     assert body["executed"] is False
     assert body["amount_in"] == "2500000"
+    assert body["deadline"] == FIXTURE["quoteRequest"]["deadline"]
+    assert body["expired"] is False
 
     # Stored on the draft, still with no hash that could be mistaken for a payment.
     draft = client.get(f"/deals/{deal_id}").json()
@@ -116,6 +118,44 @@ def test_i01_dry_quote_forwards_dry_true_and_stores_a_quote_id(monkeypatch):
     assert stored["dry"] is True
     assert stored["tx_hash"] is None
     assert stored["deposit_address"] is None
+
+
+@pytest.mark.parametrize(
+    "request_deadline,quote_deadline,expected_deadline,expected_expired",
+    [
+        (
+            "2020-01-01T00:00:00.000Z",
+            "2030-01-01T00:00:00.000Z",
+            "2030-01-01T00:00:00.000Z",
+            False,
+        ),
+        (
+            "2030-01-01T00:00:00.000Z",
+            None,
+            None,
+            True,
+        ),
+    ],
+)
+def test_live_summary_uses_only_the_quote_deadline(
+    monkeypatch, request_deadline, quote_deadline, expected_deadline, expected_expired
+):
+    monkeypatch.setenv("TRUSTLOCK_INTENTS_MODE", "live")
+    response = {
+        "quoteRequest": {"deadline": request_deadline},
+        "quote": {} if quote_deadline is None else {"deadline": quote_deadline},
+    }
+    request = {
+        "originAsset": intents.USDC_ON_BASE,
+        "destinationAsset": intents.USDC_ON_NEAR,
+        "recipient": "trustlock.near",
+    }
+
+    summary = intents._summary(response, request, "live-quote-id")
+
+    assert summary["dry"] is False
+    assert summary["deadline"] == expected_deadline
+    assert summary["expired"] is expected_expired
 
 
 def test_i01_amount_defaults_to_the_draft_price(monkeypatch):
