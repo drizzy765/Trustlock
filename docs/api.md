@@ -149,6 +149,43 @@ Forwards to 1Click. Honour `TRUSTLOCK_INTENTS_MODE`. In `dry`, force `dry: true`
 
 Rejected unless mode is `live`. Writes the deposit hash onto the draft. Amounts must stay tiny.
 
+## Seller agent: built-in or bring your own model (issue #26)
+
+The agent reads, checks, explains, recommends and prepares unsigned transactions. No provider has
+a tool that moves, releases or refunds funds. Every provider gets the same seven tools
+(`agent/app/tools.py`): `draft_deal`, `explain_deal`, `check_order_evidence` (planned, always
+`UNVERIFIED` today), `check_receipt`, `get_deal_status`, `recommend_release`, `prepare_confirm_tx`
+(unsigned, signer is the buyer). Any other tool name a model asks for returns
+`ERR_TOOL_NOT_ALLOWED` and nothing runs.
+
+| Method and path | Body | Returns |
+| --- | --- | --- |
+| `GET /agent/providers` | | `[{id, label, status, needs_key}]`; `status` is `works_with` only once tested end to end, else `planned` |
+| `GET /sellers/{seller_id}/agent` | | `{seller_id, provider, key: {saved, masked}}` |
+| `PUT /sellers/{seller_id}/agent` | `{provider}` | same; 404 `ERR_UNKNOWN_PROVIDER` |
+| `PUT /sellers/{seller_id}/agent/key` | `{api_key}` | same, `masked` shows the last 4 characters; saving again rotates the key |
+| `DELETE /sellers/{seller_id}/agent/key` | | same plus `deleted` |
+| `POST /sellers/{seller_id}/agent/test` | | `{provider, ok}` |
+| `POST /sellers/{seller_id}/agent/ask` | `{message}` | `{provider, text, refused, code, tool_calls, can_move_funds: false}` |
+
+Keys are encrypted at rest with envelope encryption (`agent/app/keystore.py`): a random AES-256-GCM
+data key per saved key, wrapped with `TRUSTLOCK_KEY_ENCRYPTION_KEY` (32 bytes, base64, from Doppler
+or Infisical), and the seller id bound as associated data. The plaintext exists only inside one
+provider call. Without `TRUSTLOCK_KEY_ENCRYPTION_KEY` saving returns 503 `ERR_KEYSTORE`. Keys never
+appear in responses, error messages, `/health` or `NEXT_PUBLIC_*`.
+
+A message that tries to move money or get a key is refused by the guard before any model is called.
+Provider failures are 502 with `ERR_PROVIDER_AUTH`, `ERR_PROVIDER_UNREACHABLE`, `ERR_PROVIDER_PLANNED`
+or `ERR_NO_KEY`.
+
+Status today: `builtin` works with. `anthropic` (Claude, official SDK, default model `claude-opus-5-5`,
+`TRUSTLOCK_ANTHROPIC_MODEL` to change it) is implemented and tested against a scripted client, not
+yet against the live API, so it stays `planned`. OpenAI, Gemini, OpenRouter and Muse are listed as
+`planned` and refuse test and ask.
+
+Limits: these endpoints have no seller authentication yet, so anyone who knows a seller id can set
+or replace that seller's key (it can never be read back). Storage is in memory, like the drafts.
+
 ## Errors
 
 Use HTTP 400 for user mistakes, 404 for an unknown draft id, 409 for illegal deal transitions the agent already knows about, 502 for RPC/1Click failures. Body: `{"error": "ERR_CODE", "message": "..."}`.

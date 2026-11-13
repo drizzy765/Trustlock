@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -6,13 +7,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from . import chain
-from .deal_agent import preview_terms
+from .deal_agent import detect_language, preview_terms
+from .guard import refusal_message, screen
 from .intents import execute as intents_execute
 from .intents import quote as intents_quote
+from .keystore import KeyStore, KeyStoreError
+from .providers import REGISTRY, AgentReply, Provider, ProviderError
 from .receipt import check_receipt
+from .tools import Toolbox
 
 load_dotenv()
 
@@ -21,6 +26,8 @@ app = FastAPI(title="TrustLock deal agent", version="0.1.0")
 # In-memory store for drafts (replace with persistent storage in production)
 deals_store: dict[int, dict] = {}
 deal_counter = 0
+# Seller agent choice and encrypted model keys (in memory too: a restart forgets them)
+keys = KeyStore()
 
 # NEAR account ids, 2 to 64 characters: named (alice.testnet) or implicit (64 hex).
 ACCOUNT_ID = r"^(?:[a-z0-9]+(?:[-_][a-z0-9]+)*\.)*[a-z0-9]+(?:[-_][a-z0-9]+)*$"
@@ -184,6 +191,110 @@ def deals_get(deal_id: int) -> dict:
 @app.post("/receipts/check")
 def receipts_check(body: ReceiptIn) -> dict:
     return check_receipt(body.model_dump())
+
+
+class ProviderIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(min_length=2, max_length=32)
+
+
+class KeyIn(BaseModel):
+    """A seller's model API key. SecretStr keeps it out of reprs and logs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: SecretStr = Field(min_length=8, max_length=512)
+
+
+class AskIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=1, max_length=2000)
+
+
+def _seller(seller_id: str) -> str:
+    if not 2 <= len(seller_id) <= 64 or not re.fullmatch(ACCOUNT_ID, seller_id):
+        raise ApiError(400, "ERR_INVALID_INPUT", "seller_id is not a NEAR account id.")
+    return seller_id
+
+
+def _provider(provider_id: str) -> Provider:
+    if provider_id not in REGISTRY:
+        raise ApiError(404, "ERR_UNKNOWN_PROVIDER", "No agent provider with that id.")
+    return REGISTRY[provider_id]
+
+
+def _keystore_error(exc: KeyStoreError) -> ApiError:
+    return ApiError(503, "ERR_KEYSTORE", str(exc))
+
+
+@app.get("/agent/providers")
+def agent_providers() -> list[dict]:
+    """Every provider with its label: "works_with" only once tested end to end, else "planned"."""
+    return [{"id": p.id, "label": p.label, "status": p.status, "needs_key": p.needs_key} for p in REGISTRY.values()]
+
+
+@app.get("/sellers/{seller_id}/agent")
+def seller_agent(seller_id: str) -> dict:
+    return keys.status(_seller(seller_id))
+
+
+@app.put("/sellers/{seller_id}/agent")
+def seller_agent_set_provider(seller_id: str, body: ProviderIn) -> dict:
+    keys.set_provider(_seller(seller_id), _provider(body.provider).id)
+    return keys.status(seller_id)
+
+
+@app.put("/sellers/{seller_id}/agent/key")
+def seller_agent_set_key(seller_id: str, body: KeyIn) -> dict:
+    """Save or rotate the key. The response shows only its last 4 characters."""
+    try:
+        keys.set_key(_seller(seller_id), body.api_key.get_secret_value())
+    except KeyStoreError as exc:
+        raise _keystore_error(exc) from None
+    return keys.status(seller_id)
+
+
+@app.delete("/sellers/{seller_id}/agent/key")
+def seller_agent_delete_key(seller_id: str) -> dict:
+    deleted = keys.delete_key(_seller(seller_id))
+    return {**keys.status(seller_id), "deleted": deleted}
+
+
+@app.post("/sellers/{seller_id}/agent/test")
+def seller_agent_test(seller_id: str) -> dict:
+    seller = _seller(seller_id)
+    provider = _provider(keys.get(seller).provider)
+    try:
+        with keys.use_key(seller) as api_key:
+            ok = provider.test_connection(api_key)
+    except KeyStoreError as exc:
+        raise _keystore_error(exc) from None
+    except ProviderError as exc:
+        raise ApiError(502, exc.code, exc.message) from None
+    return {"provider": provider.id, "ok": ok}
+
+
+@app.post("/sellers/{seller_id}/agent/ask")
+def seller_agent_ask(seller_id: str, body: AskIn) -> dict:
+    """Run the seller's agent on one message. It can read, check, recommend and prepare unsigned
+    transactions; no provider has a tool that moves funds."""
+    seller = _seller(seller_id)
+    provider = _provider(keys.get(seller).provider)
+    refusal = screen(body.message)
+    if refusal is not None:
+        language = detect_language(body.message)
+        return AgentReply(provider.id, refusal_message(refusal, language), refused=True, code=refusal.code).as_dict()
+    toolbox = Toolbox(get_deal=deals_get, contract_id=chain.contract_id)
+    try:
+        with keys.use_key(seller) as api_key:
+            reply = provider.run(api_key, body.message, toolbox)
+    except KeyStoreError as exc:
+        raise _keystore_error(exc) from None
+    except ProviderError as exc:
+        raise ApiError(502, exc.code, exc.message) from None
+    return reply.as_dict()
 
 
 @app.post("/intents/quote")
