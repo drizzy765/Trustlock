@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { agentUrl, contractId } from "@/lib/config";
 import { initNear, isSignedIn, getAccountId, signIn, createDeal, getDeal, getExplorerUrl } from "@/lib/near";
-import { sha256 } from "crypto-js";
+import { SHA256 as sha256 } from "crypto-js";
 import Link from "next/link";
 
 // Separate component for URL params to avoid SSR issues

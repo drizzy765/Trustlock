@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { initNear, isSignedIn, getAccountId, signIn, createDeal, getExplorerUrl } from "@/lib/near";
 import { agentUrl } from "@/lib/config";
-import { sha256 } from "crypto-js";
+import { SHA256 as sha256 } from "crypto-js";
 
 export default function SellerOnboardPage() {
   const [accountId, setAccountId] = useState<string | null>(null);
