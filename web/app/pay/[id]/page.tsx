@@ -2,9 +2,28 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { contractId, usdcToken } from "@/lib/config";
+import { contractId, usdcToken, network } from "@/lib/config";
 import { initNear, isSignedIn, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal } from "@/lib/near";
 import Link from "next/link";
+
+// Network badge component - shows actual network from config
+function NetworkBadge() {
+  const isTestnet = network === "testnet";
+  const isMainnet = network === "mainnet";
+  
+  return (
+    <span style={{ 
+      background: isMainnet ? "#22c55e" : isTestnet ? "#3b82f6" : "#6b7280",
+      color: "#000", 
+      padding: "4px 8px", 
+      borderRadius: 4,
+      fontSize: 12,
+      fontWeight: "bold"
+    }}>
+      {network}
+    </span>
+  );
+}
 
 export default function PayDealPage() {
   const params = useParams();
@@ -137,16 +156,7 @@ export default function PayDealPage() {
         {isConnected ? (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Connected: <strong>{accountId}</strong></span>
-            <span style={{ 
-              background: "#22c55e", 
-              color: "#000", 
-              padding: "4px 8px", 
-              borderRadius: 4,
-              fontSize: 12,
-              fontWeight: "bold"
-            }}>
-              testnet
-            </span>
+            <NetworkBadge />
           </div>
         ) : (
           <button 
