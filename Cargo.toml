@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "contract",
+    # Test-only mock NEP-141 token for the workspaces safety battery.
+    "mock-ft",
 ]
 resolver = "2"
 

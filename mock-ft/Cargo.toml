@@ -1,0 +1,11 @@
+[package]
+name = "trustlock-mock-ft"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { version = "5.5" }

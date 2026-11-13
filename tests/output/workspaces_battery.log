@@ -1,0 +1,37 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /mnt/c/Users/USER/Documents/trustlock/contract/Cargo.toml
+workspace: /mnt/c/Users/USER/Documents/trustlock/Cargo.toml
+   Compiling trustlock v0.1.0 (/mnt/c/Users/USER/Documents/trustlock/contract)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 02s
+     Running tests/workspaces.rs (target/debug/deps/workspaces-ef8039facabc13fa)
+
+running 13 tests
+test spec::s01_happy_path::s01_happy_path has been running for over 60 seconds
+test spec::s02_double_release::s02_double_release_protection has been running for over 60 seconds
+test spec::s03_replayed_qr::s03_replayed_qr_protection has been running for over 60 seconds
+test spec::s04_timeout_refund::s04_expired_deadline_refund has been running for over 60 seconds
+test spec::s03_replayed_qr::s03_replayed_qr_protection ... ok
+test spec::s05_early_refund::s05_early_refund_blocked has been running for over 60 seconds
+test spec::s04_timeout_refund::s04_expired_deadline_refund ... ok
+test spec::s01_happy_path::s01_happy_path ... ok
+test spec::s02_double_release::s02_double_release_protection ... ok
+test spec::s06_stranger::s06_stranger_confirm_blocked has been running for over 60 seconds
+test spec::s07_rider_key::s07_rider_key_confinement has been running for over 60 seconds
+test spec::s08_wrong_amount::s08_wrong_amount_funding_blocked has been running for over 60 seconds
+test spec::s05_early_refund::s05_early_refund_blocked ... ok
+test spec::s06_stranger::s06_stranger_confirm_blocked ... ok
+test spec::s07_rider_key::s07_rider_key_confinement ... ok
+test spec::s09_dispute_freeze::s09_dispute_freeze has been running for over 60 seconds
+test spec::s10_buyer_qr_auth::s10_buyer_confirm_receipt has been running for over 60 seconds
+test spec::s11_payout_failure::s11_payout_transfer_failure_retry has been running for over 60 seconds
+test spec::s08_wrong_amount::s08_wrong_amount_funding_blocked ... ok
+test spec::s12_refund_failure::s12_refund_transfer_failure has been running for over 60 seconds
+test spec::s09_dispute_freeze::s09_dispute_freeze ... ok
+test spec::s10_buyer_qr_auth::s10_buyer_confirm_receipt ... ok
+test spec::s11_payout_failure::s11_payout_transfer_failure_retry ... ok
+test spec::s13_dispute_race::s13_dispute_during_payout has been running for over 60 seconds
+test spec::s13_dispute_race::s13_dispute_during_payout ... ok
+test spec::s12_refund_failure::s12_refund_transfer_failure ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 683.87s
+
