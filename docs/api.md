@@ -141,6 +141,14 @@ Request:
 
 Response: a verdict object compatible with the micro1 schema (`CONFIRMED` | `SUSPICIOUS` | `NOT_FOUND` | `UNVERIFIED`) plus `funding_allowed` (true only for `CONFIRMED`).
 
+Mobile-money context (M-Pesa, MTN MoMo, Wave) is copy only, not a live rail.
+A mobile-money screenshot alone is never `CONFIRMED`, same as a bank screenshot.
+Structured mobile-money alerts (provider, txn id, amount, currency, recipient)
+are future work: today the checker reads `bank_alerts` only, so any
+`mobile_money_alerts` payload returns `NOT_FOUND` with `funding_allowed: false`
+unless a matching `bank_alerts` entry confirms it. No telecom integration is
+claimed.
+
 ## `POST /intents/quote`
 
 Asks 1Click for a real quote and returns it **only after verifying its ed25519 signature**

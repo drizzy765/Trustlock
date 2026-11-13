@@ -31,7 +31,7 @@ The confirmed end-to-end product flow (actors, sequence, state machine, built vs
 | | ClearSend | TrustLock design target |
 | --- | --- | --- |
 | Release trigger | LLM `attest` on free text | Rider scans a one-time buyer-signed QR |
-| Payment check | none visible | Deterministic receipt check for naira funding; not a bank verification integration |
+| Payment check | none visible | Deterministic receipt check for naira funding context (e.g. Lagos bank transfer; Nairobi M-Pesa and Accra MoMo are context only, not live rails); not a bank or telecom verification integration |
 | Chain | NEAR + testnet only | Target: testnet proof first; tiny mainnet USDC via 1Click only if safely completed |
 | Intents | `dry: true` quotes | Real signed dry quotes verified before display; live execute is a separate optional step |
 | Languages | English | Pidgin, Yoruba, English, voice notes |
@@ -50,6 +50,7 @@ Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and
 | Agoro Oluwatimilehin (Timi) | [@drizzy765](https://github.com/drizzy765) | Escrow contract and unit tests, Next.js `/pay` `/scan` `/dashboard`, testnet wallet, 1Click quotes, testnet end-to-end run, README judge path, demo video, X post and submission | #5, #8, #9, #10, #12, #13 (stretch #11, #14, #17, #18) |
 | Brayan Sorgho | [@Sorghobrayan-dotcom](https://github.com/Sorghobrayan-dotcom) | Deal agent: multilingual preview (Pidgin, Yoruba, English), refusal to release funds or return keys, deal API endpoints | #2, #4 (stretch #15, #16, #19) |
 | Mikezx8 | [@Mikezx8](https://github.com/Mikezx8) | Security: contract and threat-model review, rider function-call key and its confinement tests, agent safety battery | #3, #6, #7, #21 |
+| metrosmash | [@metrosmash](https://github.com/metrosmash) | Contributor | — |
 
 Full role details: [ROLES.md](ROLES.md). Wallet / testnet account questions: [docs/testnet_accounts.md](docs/testnet_accounts.md).
 

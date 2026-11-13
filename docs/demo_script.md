@@ -20,11 +20,11 @@ Free X video limit is about 2:20, so this will upload natively. Still keep it sh
 
 ## 0:00–0:12 — Problem
 
-On screen: an Instagram DM. A buyer sends a transfer screenshot. A seller in Lagos has to choose "send the goods" or "lose the sale."
+On screen: an Instagram DM. A buyer sends a transfer screenshot. A seller in Lagos has to choose "send the goods" or "lose the sale." Same story for a Nairobi buyer on M-Pesa or an Accra buyer on MoMo: off-chain mobile-money context, not a live telecom rail.
 
 Say:
 
-> Across Africa, sellers on Instagram, WhatsApp, Telegram and other chat apps lose goods to fake transfer screenshots. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery.
+> Across Africa, sellers on Instagram, WhatsApp, Telegram and other chat apps lose goods to fake transfer screenshots — a Lagos bank transfer alert, a Nairobi M-Pesa message, an Accra MoMo notification. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery. TrustLock does not connect to those bank or telecom rails; it locks USDC in escrow and releases only on delivery proof.
 
 ## 0:12–0:28 — The lock (only after the testnet gate)
 

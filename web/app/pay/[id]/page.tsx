@@ -658,6 +658,9 @@ export default function PayDealPage() {
                   ? "Dry quote: real 1Click data with dry: true. There is no deposit address and no transaction hash, and no funds move."
                   : "This build has not executed this quote."}
               </p>
+              <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>
+                Off-chain context only: a Lagos bank transfer, Nairobi M-Pesa, or Accra MoMo message does not fund escrow. Only a USDC transfer into escrow does. No live telecom rail is connected.
+              </p>
               <button
                 onClick={() => loadQuote(draft.deal_id)}
                 disabled={quoteLoading}
