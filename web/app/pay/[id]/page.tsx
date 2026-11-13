@@ -109,8 +109,8 @@ export default function PayDealPage() {
         contractId: contractId,
         methodName: "confirm_receipt",
         args: { deal_id: dealIdNum },
-        gas: "50000000000000", // 50 Tgas
-        attachedDeposit: "0"
+        gas: BigInt("50000000000000"), // 50 Tgas
+        attachedDeposit: BigInt(0)
       });
       
       // Get transaction hash from result

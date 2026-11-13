@@ -46,6 +46,7 @@ export async function initNear() {
   contract = new Contract(wallet.account(), contractId, {
     viewMethods: ["get_deal"],
     changeMethods: ["create_deal", "confirm_delivery"],
+    useLocalViewExecution: false,
   });
 
   return { near, wallet, contract };
@@ -69,7 +70,7 @@ export function getAccountId() {
 
 export async function signIn() {
   if (!wallet) await initNear();
-  wallet?.requestSignIn({ contractId });
+  wallet?.requestSignIn({ contractId, keyType: "ed25519" });
 }
 
 export function signOut() {
@@ -129,7 +130,7 @@ export async function fundDeal(dealId: number, amount: string, usdcContractId: s
       amount: amount,
       msg: dealId.toString()
     },
-    gas: "50000000000000", // 50 Tgas
-    attachedDeposit: "1" // 1 yoctoNEAR required by NEP-141
+    gas: BigInt("50000000000000"), // 50 Tgas
+    attachedDeposit: BigInt(1) // 1 yoctoNEAR required by NEP-141
   });
 }

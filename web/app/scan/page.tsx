@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { initNear, isSignedIn, getAccountId, signIn, confirmDelivery, getDeal, getExplorerUrl } from "@/lib/near";
-import { sha256 } from "crypto-js";
+import { SHA256 as sha256 } from "crypto-js";
 
 export default function ScanPage() {
   const [accountId, setAccountId] = useState<string | null>(null);
