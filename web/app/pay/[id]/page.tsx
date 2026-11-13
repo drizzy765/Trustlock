@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { contractId, usdcToken, network, agentUrl } from "@/lib/config";
 import { initNear, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal, createDeal } from "@/lib/near";
+import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, type Mode, type Quote } from "@/lib/quote";
+import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
 import Link from "next/link";
 
@@ -36,6 +38,7 @@ interface Draft {
   deadline_hours: number;
   onchain_deal_id: number | null;
   status: string;
+  agent_metadata?: { intents_quote: Quote | null };
 }
 
 interface OnchainDeal {
@@ -146,7 +149,25 @@ export default function PayDealPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [pending, setPending] = useState<PendingAttempt | null>(null);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [agentMode, setAgentMode] = useState<Mode>("demo");
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  /** Fetch a fresh verified quote for this draft. Amounts render only on success. */
+  async function loadQuote(dealId: number) {
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      setQuote(await fetchQuote(dealId));
+    } catch (e) {
+      setQuote(null);
+      setQuoteError(e instanceof Error ? e.message : "Quote unavailable.");
+    } finally {
+      setQuoteLoading(false);
+    }
+  }
 
   async function loadDealById(onchainDealId: number) {
     const dealData = await getDeal(onchainDealId);
@@ -192,6 +213,14 @@ export default function PayDealPage() {
       }
       setDraft(data as Draft);
       setPending(readPending(data.deal_id));
+      const storedQuote = (data as Draft).agent_metadata?.intents_quote ?? null;
+      if (storedQuote?.signature_verified) {
+        // A quote is reusable until it expires; it carries a quote id, never a tx hash.
+        setQuote(storedQuote);
+        setQuoteError(null);
+      } else {
+        void loadQuote(data.deal_id);
+      }
       if (typeof data.onchain_deal_id === "number") {
         await loadDealById(data.onchain_deal_id);
       }
@@ -214,6 +243,13 @@ export default function PayDealPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId]);
+
+  // The badge follows the backend, never a user choice. No dropdown can select live.
+  useEffect(() => {
+    fetchHealth().then((health) => {
+      if (health?.intents_mode) setAgentMode(health.intents_mode);
+    });
+  }, []);
 
   // Focus the confirm button when the modal opens; Escape closes it.
   useEffect(() => {
@@ -540,6 +576,90 @@ export default function PayDealPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Intents route: a verified 1Click quote, or nothing. No dropdown can force live. */}
+      {draft && !legacy && (
+        <div style={{
+          background: "#111827",
+          padding: 16,
+          borderRadius: 8,
+          marginBottom: 24,
+          border: "1px solid #1f2937"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Intents funding route</h3>
+            <ModeBadge mode={displayMode(quote, agentMode)} />
+          </div>
+
+          {quoteLoading ? (
+            <p style={{ color: "#9ca3af", margin: 0 }}>Checking the 1Click quote…</p>
+          ) : quoteError ? (
+            <div>
+              <p role="alert" style={{ color: "#fbbf24", marginTop: 0 }}>
+                Quote unavailable. {quoteError} No amount is shown.
+              </p>
+              <button
+                onClick={() => loadQuote(draft.deal_id)}
+                style={{
+                  background: "transparent",
+                  color: "#fbbf24",
+                  border: "1px solid #fbbf24",
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : quote && quote.signature_verified ? (
+            <div>
+              {verifiedAmount(quote) ? (
+                <p style={{ fontSize: 20, fontWeight: "bold", margin: "4px 0" }}>
+                  {quote.amount_in_formatted} USDC on {assetLabel(quote.origin_asset)}
+                  {" → "}
+                  {verifiedAmount(quote)} USDC on {assetLabel(quote.destination_asset)}
+                </p>
+              ) : (
+                <p style={{ color: "#fbbf24", margin: "4px 0" }}>
+                  Quote expired. Refresh before trusting an amount.
+                </p>
+              )}
+              <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>
+                Quote {shortQuoteId(quote.quote_id)} · 1Click signature verified ·{" "}
+                {quote.expired
+                  ? "expired"
+                  : `good until ${quote.deadline ? new Date(quote.deadline).toLocaleTimeString() : "shortly"}`}
+              </p>
+              <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>
+                {quote.dry
+                  ? "Dry quote: real 1Click data with dry: true. There is no deposit address and no transaction hash, and no funds move."
+                  : "This build has not executed this quote."}
+              </p>
+              <button
+                onClick={() => loadQuote(draft.deal_id)}
+                disabled={quoteLoading}
+                style={{
+                  background: "transparent",
+                  color: "#60a5fa",
+                  border: "1px solid #60a5fa",
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  cursor: quoteLoading ? "not-allowed" : "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                Refresh quote
+              </button>
+            </div>
+          ) : quote ? (
+            <p role="alert" style={{ color: "#ef4444", margin: 0 }}>
+              Quote rejected: signature not verified. No amount is shown.
+            </p>
+          ) : null}
         </div>
       )}
 

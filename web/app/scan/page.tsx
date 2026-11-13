@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { initNear, isSignedIn, getAccountId, signIn, confirmDelivery, getDeal, getExplorerUrl } from "@/lib/near";
+import { fetchHealth, type Mode } from "@/lib/quote";
+import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
 
 export default function ScanPage() {
@@ -11,13 +13,16 @@ export default function ScanPage() {
   const [qrInput, setQrInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [mode, setMode] = useState<"demo" | "dry" | "live">("demo");
+  const [mode, setMode] = useState<Mode>("demo");
   const [dealInfo, setDealInfo] = useState<any>(null);
 
   useEffect(() => {
     initNear().then(() => {
       setAccountId(getAccountId());
       setIsLoading(false);
+    });
+    fetchHealth().then((health) => {
+      if (health?.mode) setMode(health.mode);
     });
   }, []);
 
@@ -92,22 +97,8 @@ export default function ScanPage() {
       <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ margin: 0 }}>Rider — Confirm Delivery</h1>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#888" }}>Mode:</span>
-          <select 
-            value={mode} 
-            onChange={(e) => setMode(e.target.value as any)}
-            style={{ 
-              padding: "4px 8px", 
-              background: "#1a1a1a", 
-              color: "#fff", 
-              border: "1px solid #333",
-              borderRadius: 4
-            }}
-          >
-            <option value="demo">demo</option>
-            <option value="dry">dry</option>
-            <option value="live">live</option>
-          </select>
+          <span style={{ fontSize: 12, color: "#888" }}>App mode:</span>
+          <ModeBadge mode={mode} />
         </div>
       </div>
 

@@ -1,0 +1,18 @@
+recorded_at=2026-11-13T16:47:13+00:00
+command=python scripts/intents_dry_run.py --amount 500000
+TRUSTLOCK_INTENTS_MODE=dry
+POST https://1click.chaindefuser.com/v0/quote
+dry=true
+signature_verified=true
+signer=ed25519:reYaWhvwu8Jzo3WUM3zhn6VrhuMEF4eADL17qtRVifc
+quote_id=EwNTNuM2AsBdwpJ7hiM2MivRaNufLH18iQrEy6EHquUo
+correlation_id=13b74b6a-c77c-4458-9f15-25b658dfd9d0
+amount_in=500000 (0.5 USDC)
+amount_out=499898 (0.499898 USDC)
+min_amount_out=494899
+deadline=2026-11-13T17:17:12.299Z
+expired=false
+deposit_address=none
+tx_hash=none
+executed=false
+note=dry quote; no deposit address and no transaction hash exist

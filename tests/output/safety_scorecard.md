@@ -29,7 +29,11 @@ Full result: 21 unit passed, 0 failed; 13 workspaces passed, 0 failed.
 | --- | --- | --- |
 | S01–S09 | PASS (9 tests) | `cargo test --test workspaces spec::s0[1-9]*`: S01 create→fund→rider release (`Released`, seller += price, buyer exact); S02 double confirm panics `ERR_BAD_STATUS`, no double pay; S03 same-QR second confirm + third create both panic `ERR_REPLAYED_QR`; S04 post-deadline `claim_timeout_refund_for` → `Refunded`, payer whole; S05 early claim panics `ERR_NOT_EXPIRED`, stays `Funded`; S06 stranger confirm panics `ERR_NOT_RIDER`; S07 restricted key calling `claim_timeout_refund_for`/`open_dispute` rejected at the key (`InvalidAccessKeyError(MethodNameMismatch)`), same key still releases via `confirm_delivery`; S08 wrong amount and double fund refunded in full (`0` kept), deal unmoved; S09 `open_dispute` → `Disputed`, confirm frozen with `ERR_BAD_STATUS`, funds locked |
 | S10–S13 | PASS (4 tests) | S10 wrong QR panics `ERR_BAD_QR`, seller `confirm_receipt` panics `ERR_NOT_BUYER`, buyer `confirm_receipt` → `Released` + paid; S11 failed payout restores `Funded` with QR freed and balances intact (retry needs a contract fix, see below); S12 failed refund keeps `Expired` with funds intact (retry needs a contract fix, see below); S13 direct `on_payout`/`on_refund` calls panic (private), dispute on `Released` panics `ERR_BAD_STATUS` |
-| I01 | NOT RUN | No dry 1Click quote was executed for this report. |
+| I01 | PASS (2026-11-13) | Real `POST /v0/quote` with `dry: true`; verified quote id stored on the draft; no tx hash. `tests/output/intents_dry_run.log`, `tests/output/intents_dry_run_http.log`, `docs/intents_dry_run.md`, `tests/test_agent_intents.py::test_i01_*`. |
+| I03 | PASS (2026-11-13) | Tampered quote bytes (amounts, recipient, origin, timestamp, signature) rejected with 502 `ERR_BAD_QUOTE_SIGNATURE` before any amount is returned; quotes that pass signature verification but carry different swap/route/type terms are rejected with `ERR_QUOTE_MISMATCH`. `tests/test_agent_intents.py::test_i03_*`, `::test_a_valid_signature_for_different_terms_is_refused`. |
+| I02 | NOT RUN | Live execute is the separate optional mainnet issue. `/intents/execute` returns 501 when live; the UI cannot render `live` without `executed: true` and a real hash. |
+
+Latest agent suite after the Intents work: 219 passed, 0 failed (2026-11-13).
 
 Known contract gaps found by S11/S12 (no contract change in #6; candidates for #18):
 - Failed `confirm_delivery` payout restores `Funded` but leaves the QR in `used_qr`, so the documented retry panics `ERR_REPLAYED_QR`.
@@ -38,7 +42,7 @@ Known contract gaps found by S11/S12 (no contract change in #6; candidates for #
 
 ## Pass bar for the video
 
-Not met yet. A01/A02 and S01–S13 pass, but I01 has not been run. Do not record the demo on this scorecard alone.
+Met on the automated battery: A01/A02, S01–S13, and I01/I03 all pass (I02 is testnet-only by design). Human steps still to do: record the demo, post on X, submit the application.
 
 ## Environment note (chain tests)
 

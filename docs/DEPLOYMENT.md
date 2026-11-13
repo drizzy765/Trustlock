@@ -94,19 +94,21 @@ near create-account rider-timi.testnet --masterAccount timi.testnet --initialBal
 
 ## Step 6: Add Rider Function-Call Key
 
+Use the documented script (near-cli-rs, not the legacy JS CLI).
+Full details and the exact commands live in `scripts/add-rider-key.ps1`
+(and `scripts/add-rider-key.sh` for bash).
+
 ```powershell
-# Generate key for rider
-near generate-key rider-timi.testnet
+# Recommended: keypair created on the rider device; only the PUBLIC key is supplied here.
+.\scripts\add-rider-key.ps1 -PublicKey ed25519:REPLACE_WITH_RIDER_PUBLIC_KEY
 
-# Get the public key
-near keys rider-timi.testnet
+# Demo fallback: generate on this machine (private key stays in your OS keychain, never in git).
+.\scripts\add-rider-key.ps1 -Generate
 
-# Add restricted key (replace <PUBLIC_KEY> with actual key)
-near add-key rider-timi.testnet <PUBLIC_KEY> `
-  --allowance 0.25 `
-  --receiverId trustlock-timi.testnet `
-  --methodNames confirm_delivery `
-  --accountId rider-timi.testnet
+# The script verifies confinement itself (read-only). To re-check manually:
+near account list-keys rider-timi.testnet network-config testnet now
+# Look for: only do ["confirm_delivery"] function calls on
+# trustlock-timi.testnet with an allowance of 0.250 NEAR
 ```
 
 ## Step 7: Update Environment

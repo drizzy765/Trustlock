@@ -132,7 +132,7 @@ export default function HomePage() {
         )}
         <br /><br />
         <strong>Contract:</strong> trustlock-timi.testnet (testnet) | 
-        <strong> Mode:</strong> demo/dry/live
+        <strong> Mode badge:</strong> demo / dry / live (live only after a real execute)
       </div>
     </main>
   );

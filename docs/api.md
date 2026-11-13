@@ -6,7 +6,7 @@ JSON in and out. No API key required in demo mode. Never return secrets.
 ## `GET /health`
 
 ```json
-{"ok": true, "mode": "demo", "network": "testnet", "contract": "trustlock.testnet"}
+{"ok": true, "mode": "demo", "intents_mode": "dry", "network": "testnet", "contract": "trustlock.testnet"}
 ```
 
 ## `POST /deals/preview`
@@ -143,11 +143,80 @@ Response: a verdict object compatible with the micro1 schema (`CONFIRMED` | `SUS
 
 ## `POST /intents/quote`
 
-Forwards to 1Click. Honour `TRUSTLOCK_INTENTS_MODE`. In `dry`, force `dry: true`.
+Asks 1Click for a real quote and returns it **only after verifying its ed25519 signature**
+(Penstock pattern). In `demo` and `dry` modes the client sends `dry: true`; there is no
+Intents testnet (HACKATHON.md Q-007).
+
+Request — a stored draft (amount comes from `price_ngn * 1000` USDC base units), or an
+explicit tiny amount:
+
+```json
+{"deal_id": 1}
+```
+
+```json
+{"amount": "500000"}
+```
+
+Dry amounts are capped at 100 USDC and live amounts at 0.50 USDC. Live mode also refuses
+to quote unless `TRUSTLOCK_INTENTS_RECIPIENT` and `TRUSTLOCK_INTENTS_REFUND_TO` are set to
+real addresses.
+
+Response (dry):
+
+```json
+{
+  "mode": "dry",
+  "dry": true,
+  "quote_id": "77Xv8sCU4HrTkXPNmah1xpJBoBgETAmCtZUbwhKLZh7q",
+  "correlation_id": "a9d3b0d1-d3cb-4853-a5cb-aef39fbb12ac",
+  "signature": "ed25519:...",
+  "signer": "ed25519:reYaWhvwu8Jzo3WUM3zhn6VrhuMEF4eADL17qtRVifc",
+  "signature_verified": true,
+  "origin_asset": "nep141:base-0x8335...omft.near",
+  "destination_asset": "nep141:17208628...",
+  "recipient": "trustlock-timi.testnet",
+  "amount_in": "2500000",
+  "amount_in_formatted": "2.5",
+  "amount_in_usd": "2.49871",
+  "amount_out": "2499707",
+  "amount_out_formatted": "2.499707",
+  "amount_out_usd": "2.498417151188",
+  "min_amount_out": "2474709",
+  "deadline": "2026-11-13T17:15:39.724Z",
+  "expired": false,
+  "deposit_address": null,
+  "tx_hash": null,
+  "executed": false,
+  "created_at": "2026-11-13T16:45:40+00:00"
+}
+```
+
+`quote_id` is the base58 SHA-256 of the signed payload, not a transaction hash. When the
+request names a `deal_id`, the verified summary is stored on that draft and appears in
+`GET /deals/{deal_id}` as `agent_metadata.intents_quote`. `deposit_address` is `null` for
+dry quotes because 1Click does not return one without `dry: false`.
+
+Errors: 400 `ERR_INVALID_AMOUNT`, `ERR_AMOUNT_TOO_LARGE`; 404 `ERR_DEAL_NOT_FOUND`;
+502 `ERR_BAD_QUOTE_SIGNATURE`, `ERR_QUOTE_MISMATCH`, `ERR_INTENTS_UPSTREAM`;
+503 `ERR_INTENTS_CONFIG` (live without real addresses, or a non-HTTPS
+`ONECLICK_API_URL` while `ONECLICK_JWT` is set). `ERR_QUOTE_MISMATCH` means the
+signed quote's request fields (route, amount, recipient/refund address, swap/deposit/
+recipient/refund type) do not match this call. A rejected quote never includes an
+amount or a hash.
+
+Optional partner JWT: `ONECLICK_JWT` from the environment only. It is sent as
+`Authorization: Bearer …`, never committed, logged, or returned. A non-HTTPS
+`ONECLICK_API_URL` is rejected with 503 `ERR_INTENTS_CONFIG` before the token is
+attached; plain HTTP is allowed only when no JWT is set.
 
 ## `POST /intents/execute`
 
-Rejected unless mode is `live`. Writes the deposit hash onto the draft. Amounts must stay tiny.
+Request: `{"deal_id": 1}`.
+
+Rejected with 409 `ERR_NOT_LIVE` unless `TRUSTLOCK_INTENTS_MODE=live`. In live mode this
+build returns 501 `ERR_LIVE_NOT_WIRED`: live execution is a separate optional issue, and
+nothing here fabricates a transaction hash. No funds are moved by this endpoint.
 
 ## Seller agent: built-in or bring your own model (issue #26)
 

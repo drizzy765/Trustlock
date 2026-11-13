@@ -64,6 +64,14 @@
 - Allowance: 0.25 NEAR
 - Public Key: ed25519:FsaTX1yvCRyMRkasgrbEAhRSeY5AqUqBYd2p7ebynaNy
 
+**Rider key 2 — added live via the #7 script generate path (#44):**
+- Command (from `scripts/add-rider-key.ps1` / `.sh`, generate mode):
+  `near account add-key rider-timi.testnet grant-function-call-access --allowance '0.25 NEAR' --contract-account-id trustlock-timi.testnet --function-names confirm_delivery autogenerate-new-keypair --signature-scheme ed25519 save-to-keychain network-config testnet sign-with-keychain send`
+- Transaction: [4nxkK8gY3ZLdnWDz2dGMrx96iroGB9qganduU86uta1v](https://explorer.testnet.near.org/transactions/4nxkK8gY3ZLdnWDz2dGMrx96iroGB9qganduU86uta1v)
+- Public Key: ed25519:23nXioMpxAtgSnD6YEp3t53HZPBnyUA9kK9xkSuk5n2D
+- Verify (`near account list-keys rider-timi.testnet network-config testnet now`):
+  `only do ["confirm_delivery"] function calls on trustlock-timi.testnet with an allowance of 0.25 NEAR` ✅
+
 **Note:** The key restrictions are enforced by NEAR protocol. Any transaction signed with this key that:
 - Calls a method other than `confirm_delivery` on `trustlock-timi.testnet`, OR
 - Calls any method on any other contract, OR
