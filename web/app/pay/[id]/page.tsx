@@ -61,9 +61,59 @@ function secretStorageKey(onchainDealId: number): string {
   return `trustlock:secret:${onchainDealId}`;
 }
 
-function readStoredSecret(onchainDealId: number): string | null {
+/** Pre-create key: written BEFORE create_deal so a wallet redirect can never strand the secret. */
+function draftSecretKey(draftId: number): string {
+  return `trustlock:secret:draft:${draftId}`;
+}
+
+function pendingKey(draftId: number): string {
+  return `trustlock:pending:${draftId}`;
+}
+
+interface PendingAttempt {
+  secret: string;
+  priceUsdc: number;
+  deadlineMs: number;
+  onchainId?: number;
+}
+
+function readKey(key: string): string | null {
   try {
-    return window.localStorage.getItem(secretStorageKey(onchainDealId));
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeKey(key: string, value: string): boolean {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearKey(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* storage already unavailable — nothing to clear */
+  }
+}
+
+function readPending(draftId: number): PendingAttempt | null {
+  const raw = readKey(pendingKey(draftId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingAttempt>;
+    if (typeof parsed.secret !== "string" || !/^[0-9a-f]{64}$/.test(parsed.secret)) return null;
+    return {
+      secret: parsed.secret,
+      priceUsdc: typeof parsed.priceUsdc === "number" ? parsed.priceUsdc : 0,
+      deadlineMs: typeof parsed.deadlineMs === "number" ? parsed.deadlineMs : 0,
+      onchainId: typeof parsed.onchainId === "number" ? parsed.onchainId : undefined,
+    };
   } catch {
     return null;
   }
@@ -95,6 +145,7 @@ export default function PayDealPage() {
   const [secretRevealed, setSecretRevealed] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [pending, setPending] = useState<PendingAttempt | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
   async function loadDealById(onchainDealId: number) {
@@ -104,6 +155,14 @@ export default function PayDealPage() {
     }
     setDeal(dealData as OnchainDeal);
     setOnchainId(onchainDealId);
+    if ((dealData as OnchainDeal).status === "Funded") {
+      // Funded means the flow finished — drop any stale resume record (keep the secret).
+      const id = parseInt(pageId, 10);
+      if (Number.isInteger(id)) {
+        clearKey(pendingKey(id));
+        setPending(null);
+      }
+    }
   }
 
   async function load() {
@@ -132,6 +191,7 @@ export default function PayDealPage() {
         throw new Error(data?.message || data?.error || `Draft failed to load (${res.status})`);
       }
       setDraft(data as Draft);
+      setPending(readPending(data.deal_id));
       if (typeof data.onchain_deal_id === "number") {
         await loadDealById(data.onchain_deal_id);
       }
@@ -170,6 +230,50 @@ export default function PayDealPage() {
     await signIn();
   }
 
+  /** Create the on-chain deal. The secret is persisted BEFORE this runs. */
+  async function createOnchainDeal(deliverySecret: string, priceUsdc: number, deadlineMs: number): Promise<number> {
+    if (!draft || !accountId) throw new Error("Deal draft missing.");
+    const qrHashHex = sha256(deliverySecret).toString();
+    const raw = await createDeal(
+      draft.seller_id,
+      draft.rider_id ?? "",
+      accountId,
+      draft.item,
+      priceUsdc.toString(),
+      deadlineMs,
+      qrHashHex
+    );
+    const newOnchainId = parseOnchainDealId(raw);
+    // Record the id immediately: a redirect during funding must be resumable.
+    writeKey(secretStorageKey(newOnchainId), deliverySecret);
+    writeKey(pendingKey(draft.deal_id), JSON.stringify({ secret: deliverySecret, priceUsdc, deadlineMs, onchainId: newOnchainId }));
+    setPending(readPending(draft.deal_id));
+    return newOnchainId;
+  }
+
+  /** Link the draft to its on-chain deal, then fund it. */
+  async function linkAndFund(draftId: number, newOnchainId: number, priceUsdc: number): Promise<void> {
+    const linkRes = await fetch(`${agentUrl}/deals/${draftId}/onchain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onchain_deal_id: newOnchainId }),
+    });
+    const linkData = await linkRes.json();
+    if (!linkRes.ok) {
+      if (linkData?.error === "ERR_ALREADY_LINKED") {
+        // A redirect landed the link already — reload instead of failing.
+        await load();
+        return;
+      }
+      throw new Error(linkData?.message || linkData?.error || `Draft link failed (${linkRes.status})`);
+    }
+    setDraft(linkData as Draft);
+
+    const fundResult = await fundDeal(newOnchainId, priceUsdc.toString(), usdcToken);
+    setTxHash(fundResult.transaction.hash as string);
+    await loadDealById(newOnchainId);
+  }
+
   /** Buyer creates the on-chain deal from the draft, links it, then funds it. */
   async function handleCreateAndFund() {
     if (!draft || !accountId || isWorking) return;
@@ -181,50 +285,68 @@ export default function PayDealPage() {
     try {
       // The buyer invents the secret here. The contract only ever sees its hash.
       const deliverySecret = newSecretHex();
-      const qrHashHex = sha256(deliverySecret).toString();
-      const priceUsdc = Math.floor(draft.price_ngn / 1000) * 1000000;
+      const priceUsdc = Math.round(draft.price_ngn * 1000);
       if (priceUsdc <= 0) {
         throw new Error("Draft price converts to zero USDC.");
       }
       const deadlineMs = Date.now() + draft.deadline_hours * 3600 * 1000;
 
-      const raw = await createDeal(
-        draft.seller_id,
-        draft.rider_id ?? "",
-        accountId,
-        draft.item,
-        priceUsdc.toString(),
-        deadlineMs,
-        qrHashHex
-      );
-      const newOnchainId = parseOnchainDealId(raw);
-
-      const linkRes = await fetch(`${agentUrl}/deals/${draft.deal_id}/onchain`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ onchain_deal_id: newOnchainId }),
-      });
-      const linkData = await linkRes.json();
-      if (!linkRes.ok) {
-        throw new Error(linkData?.message || linkData?.error || `Draft link failed (${linkRes.status})`);
+      // Persist BEFORE any wallet redirect: a reload must find the secret, never re-roll it.
+      if (!writeKey(draftSecretKey(draft.deal_id), deliverySecret)) {
+        throw new Error("This browser refused to save the delivery code. Without storage a wallet redirect would strand the secret — enable it and retry.");
       }
+      writeKey(pendingKey(draft.deal_id), JSON.stringify({ secret: deliverySecret, priceUsdc, deadlineMs }));
 
-      const fundResult = await fundDeal(newOnchainId, priceUsdc.toString(), usdcToken);
-      setTxHash(fundResult.transaction.hash as string);
-
-      try {
-        window.localStorage.setItem(secretStorageKey(newOnchainId), deliverySecret);
-      } catch {
-        // Storage throwing must be visible, not silent.
-        setError("Funds locked, but this browser refused to save the delivery code. Copy it now — it is shown once.");
-      }
+      const newOnchainId = await createOnchainDeal(deliverySecret, priceUsdc, deadlineMs);
+      await linkAndFund(draft.deal_id, newOnchainId, priceUsdc);
+      clearKey(pendingKey(draft.deal_id));
+      setPending(null);
       setSecret(deliverySecret);
       setSecretRevealed(true);
-      setDraft(linkData as Draft);
-      await loadDealById(newOnchainId);
     } catch (e) {
       console.error("Create and fund failed:", e);
       alert("Failed to lock funds: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  /** Resume after a redirect that landed between create and fund. */
+  async function handleResumeFunding() {
+    if (!draft || !pending?.onchainId || isWorking) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      const priceUsdc = pending.priceUsdc > 0 ? pending.priceUsdc : Math.round(draft.price_ngn * 1000);
+      await linkAndFund(draft.deal_id, pending.onchainId, priceUsdc);
+      clearKey(pendingKey(draft.deal_id));
+      setPending(null);
+    } catch (e) {
+      console.error("Resume funding failed:", e);
+      alert("Failed to resume funding: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  /** Retry a create that was interrupted before the deal existed. Same secret — never re-rolled. */
+  async function handleRetryCreate() {
+    if (!draft || !pending || pending.onchainId || !accountId || isWorking) return;
+    if (accountId !== draft.buyer_id) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      const priceUsdc = pending.priceUsdc > 0 ? pending.priceUsdc : Math.round(draft.price_ngn * 1000);
+      const deadlineMs = pending.deadlineMs > Date.now() ? pending.deadlineMs : Date.now() + draft.deadline_hours * 3600 * 1000;
+      const newOnchainId = await createOnchainDeal(pending.secret, priceUsdc, deadlineMs);
+      await linkAndFund(draft.deal_id, newOnchainId, priceUsdc);
+      clearKey(pendingKey(draft.deal_id));
+      setPending(null);
+      setSecret(pending.secret);
+      setSecretRevealed(true);
+    } catch (e) {
+      console.error("Retry create failed:", e);
+      alert("Failed to retry: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setIsWorking(false);
     }
@@ -278,11 +400,15 @@ export default function PayDealPage() {
   const isConnected = !!accountId;
   const buyerMismatch =
     draft !== null && !legacy && isConnected && accountId !== draft.buyer_id;
-  const storedSecret =
-    onchainId !== null && deal?.status === "Funded" && !secret
-      ? readStoredSecret(onchainId)
-      : null;
-  const visibleSecret = secret ?? (secretRevealed ? storedSecret : null);
+  // Every place the secret can live: memory, on-chain key, pre-create draft key, pending record.
+  const availableSecret =
+    secret ??
+    (onchainId !== null ? readKey(secretStorageKey(onchainId)) : null) ??
+    (draft !== null ? readKey(draftSecretKey(draft.deal_id)) : null) ??
+    pending?.secret ??
+    null;
+  const visibleSecret = secret ?? (secretRevealed ? availableSecret : null);
+  const hasStoredSecret = secret === null && availableSecret !== null;
   const canCreateAndFund =
     draft !== null && !legacy && draft.onchain_deal_id == null && !buyerMismatch;
 
@@ -357,6 +483,63 @@ export default function PayDealPage() {
             This link names <strong>{draft.buyer_id}</strong> as buyer, but you connected
             as <strong>{accountId}</strong>. Connect with the named buyer wallet to continue.
           </p>
+        </div>
+      )}
+
+      {draft && draft.onchain_deal_id == null && pending && !buyerMismatch && (
+        <div style={{
+          background: "#1a1a1a",
+          padding: 16,
+          borderRadius: 8,
+          marginBottom: 24,
+          border: "1px solid #3b82f6"
+        }}>
+          {pending.onchainId ? (
+            <div>
+              <p style={{ color: "#60a5fa", marginTop: 0 }}>
+                A previous attempt created on-chain deal #{pending.onchainId} but did not finish funding.
+              </p>
+              <button
+                disabled={!isConnected || isWorking}
+                onClick={handleResumeFunding}
+                style={{
+                  width: "100%",
+                  background: !isConnected ? "#444" : "#3b82f6",
+                  color: "#fff",
+                  border: "none",
+                  padding: "12px 24px",
+                  borderRadius: 6,
+                  cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                {isWorking ? "Resuming…" : "Resume funding"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p style={{ color: "#60a5fa", marginTop: 0 }}>
+                A previous attempt was interrupted before the deal was created.
+                Your delivery code survived — retrying reuses the same code.
+              </p>
+              <button
+                disabled={!isConnected || isWorking}
+                onClick={handleRetryCreate}
+                style={{
+                  width: "100%",
+                  background: !isConnected ? "#444" : "#3b82f6",
+                  color: "#fff",
+                  border: "none",
+                  padding: "12px 24px",
+                  borderRadius: 6,
+                  cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                {isWorking ? "Retrying…" : "Retry — same delivery code"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -499,7 +682,7 @@ export default function PayDealPage() {
                     </button>
                   </div>
                 </div>
-              ) : storedSecret ? (
+              ) : hasStoredSecret ? (
                 <button
                   onClick={() => setSecretRevealed(true)}
                   style={{
