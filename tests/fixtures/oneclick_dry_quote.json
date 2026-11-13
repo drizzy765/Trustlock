@@ -1,0 +1,42 @@
+{
+  "quote": {
+    "amountIn": "2500000",
+    "amountInFormatted": "2.5",
+    "amountInUsd": "2.498710000000",
+    "minAmountIn": "2500000",
+    "amountOut": "2499707",
+    "amountOutFormatted": "2.499707",
+    "amountOutUsd": "2.498417151188",
+    "minAmountOut": "2474709",
+    "timeEstimate": 35,
+    "refundFee": "2400",
+    "withdrawFee": "0"
+  },
+  "quoteRequest": {
+    "dry": true,
+    "depositMode": "SIMPLE",
+    "swapType": "EXACT_INPUT",
+    "slippageTolerance": 100,
+    "originAsset": "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
+    "depositType": "ORIGIN_CHAIN",
+    "destinationAsset": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    "amount": "2500000",
+    "refundTo": "0x1111111111111111111111111111111111111111",
+    "refundType": "ORIGIN_CHAIN",
+    "recipient": "trustlock-timi.testnet",
+    "recipientType": "INTENTS",
+    "deadline": "2026-11-13T17:15:39.724Z",
+    "confidentiality": "public",
+    "quoteWaitingTimeMs": 0,
+    "insured": false,
+    "appFees": [
+      {
+        "recipient": "5880ad2b362620fadf759cbceb1cd5737ce8c6ed7fb8e9942881e6731f9247dd",
+        "fee": 1
+      }
+    ]
+  },
+  "signature": "ed25519:4AvGf16dwMwHvQiuzKam4Q1YkAfsx8Mi4Sef8ZxrCRcTGi9YJppHSRRazVUhUCEDGg5TyCuhCwsg5wnWerMovkjP",
+  "timestamp": "2026-11-13T16:45:40.247Z",
+  "correlationId": "a462b797-978c-4235-a58a-6f97c41655bd"
+}

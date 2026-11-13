@@ -112,7 +112,7 @@ stateDiagram-v2
 | Contract: refund | `claim_timeout_refund_for` + `on_refund` | Retry path: if the refund transfer fails, the deal stays `Expired`, but the claim requires `Funded`, so it can't be retried |
 | Contract: disputes | `open_dispute` → Disputed | `resolve_dispute` (owner or multisig, manual v1). Without it, disputed funds are stuck |
 | Contract: tests and deploy | Unit tests for status strings | near-workspaces integration tests (#5, #6); testnet deploy (#10) |
-| Agent | FastAPI: `/deals/preview` (deterministic stub), `/receipts/check`, `/intents/quote` and `/execute` (placeholders) | Deal reading, evidence checks, release recommendation, unsigned tx prep; bring-your-own-model config with encrypted keys; Intron Sahara African languages |
+| Agent | FastAPI: `/deals/preview` (deterministic stub), `/receipts/check`, `/intents/quote` (real 1Click dry quote, signature-verified), `/intents/execute` (gated, returns 501 when live) | Deal reading, evidence checks, release recommendation, unsigned tx prep; bring-your-own-model config with encrypted keys; Intron Sahara African languages |
 | Web | Placeholder `/`, `/pay`, `/scan`, `/dashboard` | Everything in the [design direction](design_direction.md): `/onboard`, `/pay/[dealId]`, share-anywhere links, `/agents` |
 | Wallet | — (`setupSelector` throws) | NEAR wallet connection on testnet; embedded or passkey buyer wallet later |
 

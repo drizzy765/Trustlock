@@ -75,7 +75,7 @@ def test_a06_no_key_material_in_health_or_preview():
 
 def test_the_agent_still_cannot_move_money():
     forbidden = ("pay", "refund", "release", "confirm", "transfer", "withdraw", "payout", "sign")
-    allowed_stub = {"/intents/execute"}  # a stub that contacts nothing (see docs/api.md)
+    allowed_stub = {"/intents/execute"}  # gated: 409 unless live, 501 in live (see docs/api.md)
     for route in app.routes:
         path = route.path.lower()
         if path in allowed_stub:

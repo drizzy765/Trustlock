@@ -9,11 +9,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from . import chain
+from . import chain, intents
 from .deal_agent import detect_language, preview_terms
 from .guard import refusal_message, screen
-from .intents import execute as intents_execute
-from .intents import quote as intents_quote
 from .keystore import KeyStore, KeyStoreError
 from .providers import REGISTRY, AgentReply, Provider, ProviderError
 from .receipt import check_receipt
@@ -90,11 +88,29 @@ class ReceiptIn(BaseModel):
     narration: str | None = None
 
 
+class QuoteIn(BaseModel):
+    """Either a stored draft (amount comes from its price) or an explicit tiny amount."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deal_id: int | None = Field(default=None, ge=1)
+    amount: str | None = Field(default=None, pattern=r"^[1-9][0-9]{0,15}$")
+
+
+class ExecuteIn(BaseModel):
+    """The draft whose verified quote would be executed. Execution is not wired yet."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deal_id: int = Field(ge=1)
+
+
 @app.get("/health")
 def health() -> dict:
     return {
         "ok": True,
         "mode": os.environ.get("TRUSTLOCK_APP_MODE", "demo"),
+        "intents_mode": intents.mode(),
         "network": os.environ.get("NEAR_NETWORK", "testnet"),
         "contract": os.environ.get("TRUSTLOCK_CONTRACT_ID", ""),
     }
@@ -297,11 +313,37 @@ def seller_agent_ask(seller_id: str, body: AskIn) -> dict:
     return reply.as_dict()
 
 
+def _quote_input(body: QuoteIn) -> tuple[str, dict | None]:
+    """The USDC base-unit amount to quote, plus the draft to record it on (if any)."""
+    if body.deal_id is None:
+        if body.amount is None:
+            raise ApiError(400, "ERR_INVALID_INPUT", "Provide deal_id or amount.")
+        return body.amount, None
+    draft = _stored(body.deal_id)
+    derived = str(draft["price_ngn"] * 1000)
+    if body.amount is not None and body.amount != derived:
+        raise ApiError(400, "ERR_INVALID_AMOUNT", "amount must match the draft price when deal_id is given.")
+    return derived, draft
+
+
 @app.post("/intents/quote")
-def quote(body: dict) -> dict:
-    return intents_quote(body)
+def quote(body: QuoteIn) -> dict:
+    """A verified 1Click quote. In dry mode it stores a quote id, never a tx hash."""
+    amount, draft = _quote_input(body)
+    try:
+        result = intents.quote(amount)
+    except intents.IntentsError as exc:
+        raise ApiError(exc.status, exc.code, exc.message) from None
+    if draft is not None:
+        draft["intents_quote"] = result
+    return result
 
 
 @app.post("/intents/execute")
-def execute(body: dict) -> dict:
-    return intents_execute(body)
+def execute(body: ExecuteIn) -> dict:
+    """Rejected unless live; live execution itself is a separate optional issue."""
+    _stored(body.deal_id)
+    try:
+        return intents.execute(body.deal_id)
+    except intents.IntentsError as exc:
+        raise ApiError(exc.status, exc.code, exc.message) from None
