@@ -207,6 +207,11 @@ export default function ScanPage() {
           <br />
           <span style={{ color: "#f87171" }}>Replayed QR codes will fail on-chain.</span>
         </p>
+        <p style={{ color: "#888", fontSize: 12 }}>
+          Fallback: if the camera fails, paste the buyer&apos;s short code / token below.
+          Same <code>confirm_delivery</code> + one-time QR rules apply. See{" "}
+          <code>docs/sms-fallback.md</code> — no live SMS gateway in v1.
+        </p>
         
         {/* Camera placeholder */}
         <div style={{ 
@@ -229,7 +234,8 @@ export default function ScanPage() {
         <textarea
           value={qrInput}
           onChange={(e) => setQrInput(e.target.value)}
-          placeholder="Paste QR code data here..."
+          placeholder="Fallback: paste short code / token here..."
+          aria-label="Fallback: paste short code or token"
           rows={4}
           style={{
             width: "100%",
