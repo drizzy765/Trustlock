@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu, Wallet, X, LogOut } from "lucide-react";
-import { initNear, getAccountId, signIn, signOut } from "@/lib/near";
+import { toast } from "sonner";
+import { initNearWithTimeout, getAccountId, signIn, signOut } from "@/lib/near";
 import { middle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import NetworkChip from "./NetworkChip";
-import { Button } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 
 const LINKS = [
   { href: "/seller/onboard", label: "Sell" },
@@ -26,14 +27,14 @@ function isCurrent(pathname: string, href: string) {
 export default function SiteNav() {
   const pathname = usePathname() ?? "/";
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    initNear()
+    // Only swaps the Connect button for the account once the wallet is ready. Never blocks the button.
+    initNearWithTimeout()
       .then(() => setAccountId(getAccountId()))
-      .catch(() => setAccountId(null))
-      .finally(() => setReady(true));
+      .catch(() => setAccountId(null));
   }, []);
 
   useEffect(() => setOpen(false), [pathname]);
@@ -54,9 +55,21 @@ export default function SiteNav() {
     window.location.reload();
   }
 
-  const wallet = !ready ? (
-    <span className="h-9 w-28 rounded-[8px] bg-ink-800" aria-hidden="true" />
-  ) : accountId ? (
+  async function connectWallet(e: MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      await signIn();
+    } catch {
+      toast.error("Couldn't open the NEAR wallet. Check your connection and try again.");
+      setConnecting(false);
+    }
+  }
+
+  // Rendered on the server as a real link to /connect, so it works even if this
+  // component never hydrates (for example when a browser extension breaks hydration).
+  const wallet = accountId ? (
     <span className="inline-flex items-center gap-1">
       <span className="font-mono text-sm text-bone" title={accountId} translate="no">
         {middle(accountId, 10, 8)}
@@ -66,10 +79,15 @@ export default function SiteNav() {
       </Button>
     </span>
   ) : (
-    <Button variant="secondary" size="sm" onClick={() => signIn()}>
+    <a
+      href="/connect"
+      onClick={connectWallet}
+      aria-busy={connecting || undefined}
+      className={buttonVariants({ variant: "secondary", size: "sm" })}
+    >
       <Wallet aria-hidden="true" strokeWidth={1.5} className="!size-4" />
-      Connect wallet
-    </Button>
+      {connecting ? "Opening wallet…" : "Connect wallet"}
+    </a>
   );
 
   return (
