@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { initNear, getAccountId, signIn } from "@/lib/near";
 import { agentUrl } from "@/lib/config";
+import { toast } from "sonner";
+import { KeyRound, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input, Label, Hint } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type Provider = { id: string; label: string; status: "works_with" | "planned"; needs_key: boolean };
 type AgentStatus = { seller_id: string; provider: string; key: { saved: boolean; masked: string | null } };
@@ -76,12 +82,20 @@ export default function SellerAgentPage() {
       setMessage(result.ok ? "Connection works." : "The provider rejected this key.");
     });
 
+  // Test results and save confirmations surface as a toast too (aria-live via the toaster).
+  useEffect(() => {
+    if (message) toast(message);
+  }, [message]);
+
   if (!sellerId) {
     return (
-      <main className="container">
-        <h1>Your AI agent</h1>
-        <p>Connect your wallet to choose an agent.</p>
-        <button className="btn-primary" onClick={() => signIn()}>Connect wallet</button>
+      <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+        <h1 className="text-[32px] leading-tight md:text-[40px]">Your AI agent</h1>
+        <p className="mt-2 text-mute">Connect your wallet to choose the agent that drafts and checks your deals.</p>
+        <Button className="mt-6" onClick={() => signIn()}>
+          <Wallet aria-hidden="true" strokeWidth={1.5} />
+          Connect wallet
+        </Button>
       </main>
     );
   }
@@ -89,58 +103,91 @@ export default function SellerAgentPage() {
   const current = providers.find((p) => p.id === status?.provider);
 
   return (
-    <main className="container">
-      <h1>Bring your own AI. It can&apos;t touch your money.</h1>
-      <p>
-        <strong>AI does the work. Cryptography holds the money.</strong> Your agent reads the deal, checks payment
-        evidence, answers buyers and prepares transactions for a person to sign. It can never release, move or
-        refund funds.
+    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+      <h1 className="text-[32px] leading-tight md:text-[40px]">Bring your own AI. It can&rsquo;t touch your money.</h1>
+      <p className="mt-3 text-mute">
+        <strong className="font-medium text-bone">AI does the work. Cryptography holds the money.</strong> Your agent reads the deal, checks
+        payment evidence, answers buyers and prepares transactions for a person to sign. It can never release, move or refund funds.
       </p>
 
-      <section className="glass-card">
-        <h2>Choose an agent</h2>
-        {providers.map((p) => (
-          <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0" }}>
-            <input
-              type="radio"
-              name="provider"
-              checked={status?.provider === p.id}
-              disabled={busy}
-              onChange={() => chooseProvider(p.id)}
-            />
-            <span>{p.label}</span>
-            <span className={`status-badge ${p.status === "works_with" ? "status-released" : "status-created"}`}>
-              {STATUS_LABEL[p.status]}
-            </span>
-          </label>
-        ))}
+      <section aria-labelledby="choose-title" className="mt-10">
+        <h2 id="choose-title" className="text-[20px]">
+          Choose an agent
+        </h2>
+        <fieldset className="mt-4 divide-y divide-line rounded-[12px] border border-line bg-ink-900" disabled={busy}>
+          <legend className="sr-only">Agent provider</legend>
+          {providers.length === 0 ? <p className="px-5 py-4 text-mute">Loading providers from the agent…</p> : null}
+          {providers.map((p) => (
+            <label key={p.id} className="flex min-h-14 cursor-pointer items-center gap-3 px-5 py-3 hover:bg-ink-800 has-[:disabled]:cursor-not-allowed">
+              <input
+                type="radio"
+                name="provider"
+                className="size-4 accent-bone"
+                checked={status?.provider === p.id}
+                disabled={busy}
+                onChange={() => chooseProvider(p.id)}
+              />
+              <span className="flex-1 text-bone">{p.label}</span>
+              <span
+                className={cn(
+                  "inline-flex h-7 items-center rounded-[6px] px-2 text-sm",
+                  p.status === "works_with" ? "bg-release/12 text-release" : "bg-faint/12 text-mute"
+                )}
+              >
+                {STATUS_LABEL[p.status]}
+              </span>
+            </label>
+          ))}
+        </fieldset>
       </section>
 
       {current?.needs_key && (
-        <section className="glass-card">
-          <h2>API key</h2>
-          <p>
-            Saved key: {status?.key.saved ? <code>{status.key.masked}</code> : "none"}. Keys are encrypted on the
-            server and never shown again.
-          </p>
-          <input
-            type="password"
-            autoComplete="off"
-            placeholder="Paste your API key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button className="btn-primary" disabled={busy || apiKey.length < 8} onClick={saveKey}>
-              {status?.key.saved ? "Replace key" : "Save key"}
-            </button>
-            <button disabled={busy || !status?.key.saved} onClick={testConnection}>Test connection</button>
-            <button disabled={busy || !status?.key.saved} onClick={deleteKey}>Delete key</button>
-          </div>
-        </section>
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>API key</CardTitle>
+            <KeyRound aria-hidden="true" strokeWidth={1.5} className="size-5 text-faint" />
+          </CardHeader>
+          <CardBody>
+            <p className="text-[15px] text-mute">
+              Saved key:{" "}
+              {status?.key.saved ? <span className="font-mono text-bone">{status.key.masked}</span> : <span className="text-bone">none</span>}. Keys are
+              encrypted on the server and never shown again.
+            </p>
+            <form
+              className="mt-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!busy && apiKey.length >= 8) saveKey();
+              }}
+            >
+              <Label htmlFor="agent-key">Paste your API key</Label>
+              <Input
+                id="agent-key"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+                placeholder="sk-…"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <Hint>Only the last 4 characters are ever shown back.</Hint>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button type="submit" disabled={busy || apiKey.length < 8}>
+                  {status?.key.saved ? "Replace key" : "Save key"}
+                </Button>
+                <Button variant="secondary" disabled={busy || !status?.key.saved} onClick={testConnection}>
+                  Test connection
+                </Button>
+                <Button variant="ghost" disabled={busy || !status?.key.saved} onClick={deleteKey}>
+                  Delete key
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
       )}
 
-      {message && <p role="status">{message}</p>}
     </main>
   );
 }
