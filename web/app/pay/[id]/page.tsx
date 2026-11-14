@@ -7,26 +7,24 @@ import { initNear, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal, crea
 import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, isQuoteExpired, quoteDeadlineMs, type Mode, type Quote } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
-import Link from "next/link";
-
-// Network badge component - shows actual network from config
-function NetworkBadge() {
-  const isMainnet = network === "mainnet";
-  const isTestnet = network === "testnet";
-
-  return (
-    <span style={{
-      background: isMainnet ? "#22c55e" : isTestnet ? "#3b82f6" : "#6b7280",
-      color: "#000",
-      padding: "4px 8px",
-      borderRadius: 4,
-      fontSize: 12,
-      fontWeight: "bold"
-    }}>
-      {network}
-    </span>
-  );
-}
+import { toast } from "sonner";
+import { Check, ChevronDown, Lock, PackageCheck, QrCode, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import StatusBadge from "@/components/StatusBadge";
+import NetworkChip from "@/components/NetworkChip";
+import ChainValue from "@/components/ChainValue";
+import AmountDisplay from "@/components/AmountDisplay";
+import LockMark from "@/components/LockMark";
+import DealTimeline, { stepsForStatus } from "@/components/DealTimeline";
+import QrCard from "@/components/QrCard";
+import ReleaseMoment from "@/components/ReleaseMoment";
+import { dealState } from "@/components/status";
+import { explorerAccountUrl, formatUsdc, usdcFromBaseUnits } from "@/lib/format";
+import { formatLocal, isLocalCurrency, type LocalCurrency } from "@/lib/fx";
 
 interface Draft {
   deal_id: number;
@@ -155,6 +153,28 @@ export default function PayDealPage() {
   const [agentMode, setAgentMode] = useState<Mode>("demo");
   const [quoteNow, setQuoteNow] = useState(() => Date.now());
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  // Display only: the seller's local-currency price rides in the link (?cur=NGN&amt=18000).
+  // Escrow is always the USDC amount from the draft; this never feeds a handler.
+  const [local, setLocal] = useState<{ currency: LocalCurrency; amount: number } | null>(null);
+  const lockedToastFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const cur = q.get("cur");
+    const amt = Number(q.get("amt"));
+    if (isLocalCurrency(cur) && Number.isFinite(amt) && amt > 0) setLocal({ currency: cur, amount: amt });
+  }, []);
+
+  // Escrow locked: one neutral toast with the explorer link.
+  useEffect(() => {
+    if (!txHash || deal?.status !== "Funded" || lockedToastFor.current === txHash) return;
+    lockedToastFor.current = txHash;
+    toast("Locked on NEAR", {
+      description: "The USDC is in escrow until delivery.",
+      action: { label: "View on NearBlocks", onClick: () => window.open(getExplorerUrl(txHash), "_blank", "noopener,noreferrer") },
+    });
+  }, [txHash, deal?.status]);
+
 
   /** Fetch a fresh verified quote for this draft. Amounts render only on success. */
   async function loadQuote(dealId: number) {
@@ -358,7 +378,7 @@ export default function PayDealPage() {
       setSecretRevealed(true);
     } catch (e) {
       console.error("Create and fund failed:", e);
-      alert("Failed to lock funds: " + (e instanceof Error ? e.message : String(e)));
+      toast.error("Failed to lock funds: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
     } finally {
       setIsWorking(false);
     }
@@ -376,7 +396,7 @@ export default function PayDealPage() {
       setPending(null);
     } catch (e) {
       console.error("Resume funding failed:", e);
-      alert("Failed to resume funding: " + (e instanceof Error ? e.message : String(e)));
+      toast.error("Failed to resume funding: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
     } finally {
       setIsWorking(false);
     }
@@ -399,7 +419,7 @@ export default function PayDealPage() {
       setSecretRevealed(true);
     } catch (e) {
       console.error("Retry create failed:", e);
-      alert("Failed to retry: " + (e instanceof Error ? e.message : String(e)));
+      toast.error("Failed to retry: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
     } finally {
       setIsWorking(false);
     }
@@ -416,7 +436,7 @@ export default function PayDealPage() {
       await loadDealById(onchainId);
     } catch (e) {
       console.error("Fund deal failed:", e);
-      alert("Failed to fund deal: " + (e instanceof Error ? e.message : String(e)));
+      toast.error("Failed to fund deal: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
     } finally {
       setIsWorking(false);
     }
@@ -443,7 +463,7 @@ export default function PayDealPage() {
       await loadDealById(onchainId);
     } catch (e) {
       console.error("Confirm receipt failed:", e);
-      alert("Failed to confirm receipt: " + (e instanceof Error ? e.message : String(e)));
+      toast.error("Failed to confirm receipt: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
     } finally {
       setIsConfirming(false);
       setShowConfirmModal(false);
@@ -466,140 +486,280 @@ export default function PayDealPage() {
     draft !== null && !legacy && draft.onchain_deal_id == null && !buyerMismatch;
   const quoteAmount = verifiedAmount(quote, quoteNow);
   const quoteExpired = isQuoteExpired(quote, quoteNow);
+  const summaryStatus = deal?.status ?? (draft ? "Created" : null);
+  const summaryItem = deal?.item ?? draft?.item ?? "";
+  // Same conversion the handlers use: draft price × 1000 = USDC base units (6 decimals).
+  const summaryAmount = deal ? usdcFromBaseUnits(deal.price) : draft ? (draft.price_ngn * 1000) / 1_000_000 : 0;
+  const summarySeller = deal?.seller ?? draft?.seller_id ?? null;
+  const summaryBuyer = deal?.buyer ?? draft?.buyer_id ?? null;
+  const summaryRider = deal?.rider ?? draft?.rider_id ?? null;
+  const timeline = stepsForStatus(summaryStatus, { txHref: txHash ? getExplorerUrl(txHash) : undefined });
+  const releasedNow = deal?.status === "Delivered" || deal?.status === "Released";
+  const refundedNow = deal?.status === "Expired" || deal?.status === "Refunded";
+  const showFundExisting =
+    deal?.status === "Created" && !canCreateAndFund && onchainId !== null && (legacy || (draft !== null && draft.onchain_deal_id != null));
+  const localLabel = local && summaryAmount > 0 ? formatLocal(local.amount, local.currency) : null;
 
   if (isLoading) {
     return (
-      <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
-        <p>Loading...</p>
+      <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="mt-8 h-44 w-full rounded-[12px]" />
+        <Skeleton className="mt-6 h-56 w-full rounded-[12px]" />
+        <p role="status" className="mt-6 text-mute">
+          Loading this deal from NEAR…
+        </p>
       </main>
     );
   }
 
   return (
-    <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>Deal #{onchainId ?? pageId}</h1>
-        <p style={{ color: "#888" }}>Review and fund this escrow deal</p>
-      </div>
+    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-[32px] leading-tight md:text-[40px]">Deal #{onchainId ?? pageId}</h1>
+        {summaryStatus ? <StatusBadge status={summaryStatus} /> : null}
+        <NetworkChip />
+      </header>
+      <p className="mt-2 text-mute">Review the order, then lock USDC. It&rsquo;s released only when the order arrives.</p>
 
-      {/* Wallet Connection */}
-      <div style={{
-        background: "#1a1a1a",
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 24,
-        border: "1px solid #333"
-      }}>
+      <div className="mt-6 flex min-h-11 flex-wrap items-center gap-3">
         {isConnected ? (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Connected: <strong>{accountId}</strong></span>
-            <NetworkBadge />
-          </div>
+          <p className="flex min-w-0 items-center gap-2 text-[15px] text-mute">
+            <Wallet aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 text-faint" />
+            Connected as <ChainValue value={accountId as string} label="your account" />
+          </p>
         ) : (
-          <button
-            onClick={handleConnect}
-            style={{
-              background: "#22c55e",
-              color: "#000",
-              border: "none",
-              padding: "12px 24px",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: 14
-            }}
-          >
-            Connect NEAR Wallet
-          </button>
+          <Button variant="secondary" onClick={handleConnect}>
+            <Wallet aria-hidden="true" strokeWidth={1.5} />
+            Connect NEAR wallet
+          </Button>
         )}
       </div>
 
-      {error && (
-        <div style={{
-          background: "#1a1a1a",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          border: "1px solid #ef4444"
-        }}>
-          <p role="alert" style={{ color: "#ef4444", margin: 0 }}>{error}</p>
-        </div>
-      )}
+      <div className="mt-6 space-y-4">
+        {error ? <Alert title="This deal didn’t load">{error}</Alert> : null}
 
-      {buyerMismatch && draft && (
-        <div style={{
-          background: "#1a1a1a",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          border: "1px solid #fbbf24"
-        }}>
-          <p role="alert" style={{ color: "#fbbf24", margin: 0 }}>
-            This link names <strong>{draft.buyer_id}</strong> as buyer, but you connected
-            as <strong>{accountId}</strong>. Connect with the named buyer wallet to continue.
-          </p>
-        </div>
-      )}
+        {buyerMismatch && draft ? (
+          <Alert tone="lock" title="Wrong wallet for this link">
+            This link names <span className="font-mono text-bone">{draft.buyer_id}</span> as the buyer, but you connected as{" "}
+            <span className="font-mono text-bone">{accountId}</span>. Connect with the named buyer wallet to continue.
+          </Alert>
+        ) : null}
 
-      {draft && draft.onchain_deal_id == null && pending && !buyerMismatch && (
-        <div style={{
-          background: "#1a1a1a",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          border: "1px solid #3b82f6"
-        }}>
-          {pending.onchainId ? (
-            <div>
-              <p style={{ color: "#60a5fa", marginTop: 0 }}>
-                A previous attempt created on-chain deal #{pending.onchainId} but did not finish funding.
-              </p>
-              <button
-                disabled={!isConnected || isWorking}
-                onClick={handleResumeFunding}
-                style={{
-                  width: "100%",
-                  background: !isConnected ? "#444" : "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  padding: "12px 24px",
-                  borderRadius: 6,
-                  cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                {isWorking ? "Resuming…" : "Resume funding"}
-              </button>
+        {draft && draft.onchain_deal_id == null && pending && !buyerMismatch ? (
+          <Card className="p-5">
+            {pending.onchainId ? (
+              <>
+                <p className="text-bone">A previous attempt created on-chain deal #{pending.onchainId} but didn&rsquo;t finish locking USDC.</p>
+                <Button className="mt-4" block size="lg" disabled={!isConnected} loading={isWorking} onClick={handleResumeFunding}>
+                  {isWorking ? "Resuming…" : "Resume locking USDC"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-bone">
+                  A previous attempt was interrupted before the deal was created. Your delivery code is saved, and retrying reuses the same code.
+                </p>
+                <Button className="mt-4" block size="lg" disabled={!isConnected} loading={isWorking} onClick={handleRetryCreate}>
+                  {isWorking ? "Retrying…" : "Retry with the same delivery code"}
+                </Button>
+              </>
+            )}
+          </Card>
+        ) : null}
+      </div>
+
+      {deal || draft ? (
+        <>
+          {/* Order summary (Stripe Checkout shape): item, seller, one big amount, deadline. */}
+          <Card className="mt-6">
+            <div className="flex items-start justify-between gap-4 px-5 pt-5 md:px-6">
+              <div className="min-w-0">
+                <p className="text-sm text-faint">Order</p>
+                <p className="mt-1 text-[20px] font-medium break-words">{summaryItem || "Untitled item"}</p>
+              </div>
+              <LockMark state={dealState(summaryStatus)} size={44} />
             </div>
-          ) : (
-            <div>
-              <p style={{ color: "#60a5fa", marginTop: 0 }}>
-                A previous attempt was interrupted before the deal was created.
-                Your delivery code survived — retrying reuses the same code.
-              </p>
-              <button
-                disabled={!isConnected || isWorking}
-                onClick={handleRetryCreate}
-                style={{
-                  width: "100%",
-                  background: !isConnected ? "#444" : "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  padding: "12px 24px",
-                  borderRadius: 6,
-                  cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                {isWorking ? "Retrying…" : "Retry — same delivery code"}
-              </button>
+            <div className="px-5 pt-4 md:px-6">
+              <AmountDisplay amount={summaryAmount} local={localLabel} />
+              {localLabel && local ? (
+                <p className="mt-2 text-sm text-faint">
+                  Seller&rsquo;s price in {local.currency} when the link was made. You lock the USDC amount.
+                </p>
+              ) : null}
             </div>
-          )}
-        </div>
-      )}
+            <dl className="mt-5 grid gap-x-6 gap-y-3 border-t border-line px-5 py-4 text-[15px] sm:grid-cols-[120px_1fr] md:px-6">
+              {summarySeller ? (
+                <>
+                  <dt className="text-faint">Seller</dt>
+                  <dd className="min-w-0">
+                    <ChainValue value={summarySeller} href={explorerAccountUrl(summarySeller)} label="seller account" />
+                  </dd>
+                </>
+              ) : null}
+              {summaryBuyer ? (
+                <>
+                  <dt className="text-faint">Buyer</dt>
+                  <dd className="min-w-0">
+                    <ChainValue value={summaryBuyer} href={explorerAccountUrl(summaryBuyer)} label="buyer account" />
+                  </dd>
+                </>
+              ) : null}
+              {summaryRider ? (
+                <>
+                  <dt className="text-faint">Rider</dt>
+                  <dd className="min-w-0">
+                    <ChainValue value={summaryRider} href={explorerAccountUrl(summaryRider)} label="rider account" />
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-faint">Deadline</dt>
+              <dd className="text-bone">
+                {deal?.deadline_ms
+                  ? new Date(deal.deadline_ms).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })
+                  : draft
+                    ? `${draft.deadline_hours} hours after you lock USDC`
+                    : "Not set"}
+              </dd>
+            </dl>
+          </Card>
 
-      {/* Intents route: a verified 1Click quote, or nothing. No dropdown can force live. */}
-      {draft && !legacy && (
+          {/* Where the deal is. Driven by the contract status. */}
+          <section aria-labelledby="progress-title" className="mt-10">
+            <h2 id="progress-title" className="text-[20px]">
+              Progress
+            </h2>
+            <DealTimeline className="mt-4" steps={timeline.steps} current={timeline.current} tone={timeline.tone} done={timeline.done} />
+          </section>
+
+          {/* Action: whichever existing branch applies. Same handlers. */}
+          <section aria-label="Next step" className="mt-10">
+            {canCreateAndFund ? (
+              <Card className="p-5 md:p-6">
+                <p className="text-[20px] font-medium">Lock {formatUsdc(summaryAmount)} USDC in escrow</p>
+                <p className="mt-1 text-[15px] text-mute">
+                  Your wallet creates the deal and locks the USDC. This device keeps a one-time delivery code for the rider.
+                </p>
+                <Button className="mt-5" block size="lg" disabled={!isConnected} loading={isWorking} onClick={handleCreateAndFund}>
+                  {!isConnected ? (
+                    "Connect your wallet to lock USDC"
+                  ) : isWorking ? (
+                    "Locking USDC…"
+                  ) : (
+                    <>
+                      <Lock aria-hidden="true" strokeWidth={1.5} />
+                      Lock USDC in escrow
+                    </>
+                  )}
+                </Button>
+                <p className="mt-3 text-sm text-faint">Testnet. No real money moves.</p>
+              </Card>
+            ) : null}
+
+            {showFundExisting ? (
+              <Card className="p-5 md:p-6">
+                <p className="text-[20px] font-medium">Lock {formatUsdc(summaryAmount)} USDC in escrow</p>
+                <p className="mt-1 text-[15px] text-mute">This deal exists on NEAR but isn&rsquo;t funded yet.</p>
+                <Button className="mt-5" block size="lg" disabled={!isConnected} loading={isWorking} onClick={handleFundExisting}>
+                  {!isConnected ? (
+                    "Connect your wallet to lock USDC"
+                  ) : isWorking ? (
+                    "Locking USDC…"
+                  ) : (
+                    <>
+                      <Lock aria-hidden="true" strokeWidth={1.5} />
+                      Lock USDC in escrow
+                    </>
+                  )}
+                </Button>
+                <p className="mt-3 text-sm text-faint">Testnet. No real money moves.</p>
+              </Card>
+            ) : null}
+
+            {deal?.status === "Funded" ? (
+              <div className="space-y-5">
+                <div className="flex items-center gap-4">
+                  <LockMark state="funded" size={56} />
+                  <div>
+                    <p className="text-[20px] font-medium">Locked on NEAR</p>
+                    <p className="text-[15px] text-mute">The USDC is held in escrow until delivery.</p>
+                  </div>
+                </div>
+
+                {/* Delivery code: generated on this device, shown once, re-openable here. */}
+                {visibleSecret ? (
+                  <QrCard secret={visibleSecret} />
+                ) : hasStoredSecret ? (
+                  <Button variant="secondary" block onClick={() => setSecretRevealed(true)}>
+                    <QrCode aria-hidden="true" strokeWidth={1.5} />
+                    Show my delivery code
+                  </Button>
+                ) : (
+                  <p className="text-[15px] text-mute">
+                    The delivery code lives in the buyer&rsquo;s browser. If you locked the USDC on this device, it shows here.
+                  </p>
+                )}
+
+                {isConnected && accountId === deal.buyer ? (
+                  <Button block size="lg" loading={isConfirming} onClick={() => setShowConfirmModal(true)}>
+                    {isConfirming ? (
+                      "Confirming…"
+                    ) : (
+                      <>
+                        <PackageCheck aria-hidden="true" strokeWidth={1.5} />
+                        I received it, release funds
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+
+                {!isConnected || accountId !== deal.buyer ? (
+                  <p className="text-[15px] text-mute">Waiting for the buyer to confirm receipt, or the rider to scan the code.</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {releasedNow ? (
+              <Card className="p-5 md:p-6">
+                <ReleaseMoment amount={summaryAmount} txHash={txHash} title={deal?.status === "Delivered" ? "Delivered." : "Released."} />
+              </Card>
+            ) : null}
+
+            {refundedNow ? (
+              <Card className="p-5 md:p-6">
+                <ReleaseMoment refund amount={summaryAmount} txHash={txHash} title={deal?.status === "Expired" ? "Expired." : "Refunded."} />
+              </Card>
+            ) : null}
+
+            {deal?.status === "Disputed" ? (
+              <Alert title="Manual review">
+                This deal is disputed. Funds stay locked in escrow until the dispute is resolved or times out. Nothing moves without that.
+              </Alert>
+            ) : null}
+          </section>
+
+          {txHash && !releasedNow && !refundedNow ? (
+            <div className="mt-6 flex flex-wrap items-center gap-2 text-sm text-faint">
+              <Check aria-hidden="true" strokeWidth={1.5} className="size-4 text-release" />
+              <span>Transaction sent</span>
+              <ChainValue value={txHash} href={getExplorerUrl(txHash)} label="transaction" />
+            </div>
+          ) : null}
+        </>
+      ) : !error ? (
+        <p role="status" className="mt-8 text-mute">
+          Loading this deal from NEAR…
+        </p>
+      ) : null}
+
+      {/* Intents route: a verified 1Click quote, or nothing. Quote card JSX unchanged (owned by the intents work). */}
+      {draft && !legacy ? (
+        <details className="group mt-10 rounded-[12px] border border-line bg-ink-900">
+          <summary className="flex h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 text-bone md:px-6">
+            Pay from another chain (quote only)
+            <ChevronDown aria-hidden="true" strokeWidth={1.5} className="size-5 text-faint transition-transform duration-200 group-open:rotate-180" />
+          </summary>
+          <div className="px-5 pb-5 md:px-6">
         <div style={{
           background: "#111827",
           padding: 16,
@@ -683,328 +843,33 @@ export default function PayDealPage() {
             </p>
           ) : null}
         </div>
-      )}
-
-      {/* Deal Details */}
-      {deal ? (
-        <div style={{
-          background: "#1a1a1a",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          border: "1px solid #333"
-        }}>
-          <h3 style={{ marginTop: 0 }}>Deal Details</h3>
-          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Item:</span>
-              <span>{deal.item}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Price:</span>
-              <span>{(Number(deal.price) / 1000000).toFixed(2)} USDC</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Seller:</span>
-              <span>{deal.seller}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Buyer:</span>
-              <span>{deal.buyer}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#888" }}>Status:</span>
-              <span style={{
-                padding: "2px 8px",
-                borderRadius: 4,
-                background: deal.status === "Created" ? "#374151" :
-                            deal.status === "Funded" ? "#1e3a8a" :
-                            deal.status === "Released" ? "#064e3b" : "#374151",
-                color: "#fff",
-                fontSize: 12
-              }}>
-                {deal.status}
-              </span>
-            </div>
           </div>
-
-          {deal.status === "Created" && !canCreateAndFund && onchainId !== null && (legacy || (draft !== null && draft.onchain_deal_id != null)) ? (
-            <button
-              disabled={!isConnected || isWorking}
-              onClick={handleFundExisting}
-              style={{
-                width: "100%",
-                background: !isConnected ? "#444" : "#22c55e",
-                color: "#fff",
-                border: "none",
-                padding: "14px 24px",
-                borderRadius: 6,
-                cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
-                fontWeight: "bold",
-                fontSize: 16
-              }}
-            >
-              {!isConnected
-                ? "Connect Wallet to Fund"
-                : isWorking
-                  ? "Locking USDC..."
-                  : "🔒 Lock Funds in Escrow"
-              }
-            </button>
-          ) : null}
-
-          {canCreateAndFund && (
-            <button
-              disabled={!isConnected || isWorking}
-              onClick={handleCreateAndFund}
-              style={{
-                width: "100%",
-                background: !isConnected ? "#444" : "#22c55e",
-                color: "#fff",
-                border: "none",
-                padding: "14px 24px",
-                borderRadius: 6,
-                cursor: !isConnected || isWorking ? "not-allowed" : "pointer",
-                fontWeight: "bold",
-                fontSize: 16
-              }}
-            >
-              {!isConnected
-                ? "Connect Wallet to Fund"
-                : isWorking
-                  ? "Locking USDC..."
-                  : "🔒 Lock Funds in Escrow"
-              }
-            </button>
-          )}
-
-          {deal.status === "Funded" ? (
-            <div>
-              <div style={{
-                background: "#1e3a8a",
-                padding: 12,
-                borderRadius: 6,
-                textAlign: "center",
-                marginBottom: 16
-              }}>
-                <p style={{ margin: 0, color: "#60a5fa" }}>
-                  ✅ This deal is funded and ready for delivery
-                </p>
-              </div>
-
-              {/* Delivery code: generated on this device, shown once, re-openable here. */}
-              {visibleSecret ? (
-                <div style={{
-                  background: "#111",
-                  padding: 16,
-                  borderRadius: 6,
-                  marginBottom: 16,
-                  border: "1px solid #fbbf24",
-                  textAlign: "center"
-                }}>
-                  <p style={{ color: "#fbbf24", fontSize: 14, marginTop: 0 }}>
-                    Your one-time delivery code — show it to the rider, no one else:
-                  </p>
-                  <code style={{ fontSize: 16, wordBreak: "break-all" }}>{visibleSecret}</code>
-                  <div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(visibleSecret)}
-                      style={{
-                        marginTop: 12,
-                        background: "#3b82f6",
-                        color: "#fff",
-                        border: "none",
-                        padding: "10px 20px",
-                        borderRadius: 6,
-                        cursor: "pointer",
-                        fontWeight: "bold"
-                      }}
-                    >
-                      📋 Copy Code
-                    </button>
-                  </div>
-                </div>
-              ) : hasStoredSecret ? (
-                <button
-                  onClick={() => setSecretRevealed(true)}
-                  style={{
-                    width: "100%",
-                    background: "transparent",
-                    color: "#fbbf24",
-                    border: "1px solid #fbbf24",
-                    padding: "12px 24px",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                    fontSize: 14,
-                    marginBottom: 16
-                  }}
-                >
-                  Show my delivery code
-                </button>
-              ) : (
-                <p style={{ color: "#888", textAlign: "center", fontSize: 14 }}>
-                  The delivery code lives in the buyer&apos;s browser. Funded on this device? It is shown above.
-                </p>
-              )}
-
-              {isConnected && accountId === deal.buyer && (
-                <button
-                  disabled={isConfirming}
-                  onClick={() => setShowConfirmModal(true)}
-                  style={{
-                    width: "100%",
-                    background: isConfirming ? "#444" : "#22c55e",
-                    color: "#fff",
-                    border: "none",
-                    padding: "14px 24px",
-                    borderRadius: 6,
-                    cursor: isConfirming ? "not-allowed" : "pointer",
-                    fontWeight: "bold",
-                    fontSize: 16,
-                    marginTop: 12
-                  }}
-                >
-                  {isConfirming
-                    ? "Confirming..."
-                    : "✅ I Received It - Release Funds"
-                  }
-                </button>
-              )}
-
-              {(!isConnected || accountId !== deal.buyer) && (
-                <p style={{ color: "#888", textAlign: "center", fontSize: 14 }}>
-                  Waiting for buyer to confirm receipt or rider to scan the code
-                </p>
-              )}
-            </div>
-          ) : null}
-
-          {deal.status !== "Created" && deal.status !== "Funded" ? (
-            <div style={{
-              background: "#064e3b",
-              padding: 12,
-              borderRadius: 6,
-              textAlign: "center"
-            }}>
-              <p style={{ margin: 0, color: "#22c55e" }}>
-                ✅ This deal is {deal.status.toLowerCase()}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      ) : !error ? (
-        <p>Loading deal...</p>
+        </details>
       ) : null}
 
-      {/* Transaction Result */}
-      {txHash && (
-        <div style={{
-          background: "#064e3b",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          border: "1px solid #22c55e"
-        }}>
-          <h4 style={{ marginTop: 0, color: "#22c55e" }}>✅ Success!</h4>
-          <p>Transaction: <code style={{ fontSize: 12 }}>{txHash}</code></p>
-          <a
-            href={getExplorerUrl(txHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#3b82f6" }}
-          >
-            View on Explorer →
-          </a>
-        </div>
-      )}
+      <p className="mt-10 text-[15px] text-mute">
+        Used to paying by bank transfer, M-Pesa or MoMo? Here you lock USDC instead, and it&rsquo;s released only when your order arrives.
+        TrustLock doesn&rsquo;t connect to banks or mobile-money networks.
+      </p>
 
-      {/* Confirm modal — releasing funds cannot be undone. */}
-      {showConfirmModal && (
-        <div
-          role="presentation"
-          onClick={() => setShowConfirmModal(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 50
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-release-title"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#1a1a1a",
-              padding: 24,
-              borderRadius: 8,
-              border: "1px solid #ef4444",
-              maxWidth: 440,
-              width: "100%"
-            }}
-          >
-            <h3 id="confirm-release-title" style={{ marginTop: 0 }}>Release funds?</h3>
-            <p style={{ color: "#ccc", fontSize: 14 }}>
-              This sends the locked USDC to the seller and <strong>cannot be undone</strong>.
-              Only confirm if you have received the item.
-            </p>
-            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  color: "#fff",
-                  border: "1px solid #555",
-                  padding: "12px 16px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                ref={confirmButtonRef}
-                onClick={handleConfirmReceipt}
-                disabled={isConfirming}
-                style={{
-                  flex: 1,
-                  background: isConfirming ? "#444" : "#ef4444",
-                  color: "#fff",
-                  border: "none",
-                  padding: "12px 16px",
-                  borderRadius: 6,
-                  cursor: isConfirming ? "not-allowed" : "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                {isConfirming ? "Releasing..." : "Yes, release funds"}
-              </button>
-            </div>
+      {/* Confirm dialog: releasing funds cannot be undone. Same handler as before. */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent aria-describedby="confirm-release-desc">
+          <DialogTitle id="confirm-release-title">Release funds?</DialogTitle>
+          <DialogDescription id="confirm-release-desc">
+            This sends the locked USDC to the seller and <strong className="font-medium text-bone">can&rsquo;t be undone</strong>. Only confirm
+            if you have the item.
+          </DialogDescription>
+          <div className="mt-6 flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowConfirmModal(false)}>
+              Cancel
+            </Button>
+            <Button ref={confirmButtonRef} className="flex-1" loading={isConfirming} onClick={handleConfirmReceipt}>
+              {isConfirming ? "Releasing…" : "Yes, release funds"}
+            </Button>
           </div>
-        </div>
-      )}
-
-      {/* Navigation */}
-      <div style={{ marginTop: 24, textAlign: "center" }}>
-        <Link
-          href="/"
-          style={{
-            color: "#3b82f6",
-            textDecoration: "none",
-            fontSize: 14
-          }}
-        >
-          ← Back to home
-        </Link>
-      </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
