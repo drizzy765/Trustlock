@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { initNear, getAccountId, signIn } from "@/lib/near";
 import { agentUrl } from "@/lib/config";
+import { sellerAuthHeader, type SellerAction } from "@/lib/seller-auth";
 import { toast } from "sonner";
 import { KeyRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,11 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await res.json();
   if (!res.ok) throw new Error(body.message ?? "The agent did not answer.");
   return body as T;
+}
+
+/** A seller write, signed so the agent knows this wallet owns the seller account. */
+async function signedCall<T>(sellerId: string, action: SellerAction, path: string, init: RequestInit): Promise<T> {
+  return call<T>(path, { ...init, headers: await sellerAuthHeader(sellerId, action) });
 }
 
 export default function SellerAgentPage() {
@@ -56,12 +62,12 @@ export default function SellerAgentPage() {
 
   const chooseProvider = (provider: string) =>
     run(async () => {
-      setStatus(await call<AgentStatus>(`/sellers/${sellerId}/agent`, { method: "PUT", body: JSON.stringify({ provider }) }));
+      setStatus(await signedCall<AgentStatus>(sellerId!, "set_provider", `/sellers/${sellerId}/agent`, { method: "PUT", body: JSON.stringify({ provider }) }));
     });
 
   const saveKey = () =>
     run(async () => {
-      const saved = await call<AgentStatus>(`/sellers/${sellerId}/agent/key`, {
+      const saved = await signedCall<AgentStatus>(sellerId!, "set_key", `/sellers/${sellerId}/agent/key`, {
         method: "PUT",
         body: JSON.stringify({ api_key: apiKey }),
       });
@@ -72,13 +78,13 @@ export default function SellerAgentPage() {
 
   const deleteKey = () =>
     run(async () => {
-      setStatus(await call<AgentStatus>(`/sellers/${sellerId}/agent/key`, { method: "DELETE" }));
+      setStatus(await signedCall<AgentStatus>(sellerId!, "delete_key", `/sellers/${sellerId}/agent/key`, { method: "DELETE" }));
       setMessage("Key deleted.");
     });
 
   const testConnection = () =>
     run(async () => {
-      const result = await call<{ ok: boolean }>(`/sellers/${sellerId}/agent/test`, { method: "POST" });
+      const result = await signedCall<{ ok: boolean }>(sellerId!, "test", `/sellers/${sellerId}/agent/test`, { method: "POST" });
       setMessage(result.ok ? "Connection works." : "The provider rejected this key.");
     });
 

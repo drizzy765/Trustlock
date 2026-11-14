@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from . import chain, intents
+from . import chain, intents, seller_auth
 from .deals_store import DealsStore
 from .deal_agent import detect_language, preview_terms
 from .guard import refusal_message, screen
@@ -21,7 +21,19 @@ from .tools import Toolbox
 
 load_dotenv()
 
-app = FastAPI(title="TrustLock deal agent", version="0.1.0")
+DEFAULT_PUBLIC_URL = "https://trustlock-el1w.onrender.com"
+
+
+def _public_url() -> str:
+    """The URL the OpenAPI `servers` entry advertises (TRUSTLOCK_PUBLIC_URL)."""
+    return os.environ.get("TRUSTLOCK_PUBLIC_URL", "").strip().rstrip("/") or DEFAULT_PUBLIC_URL
+
+
+app = FastAPI(
+    title="TrustLock deal agent",
+    version="0.1.0",
+    servers=[{"url": _public_url(), "description": "TrustLock agent"}],
+)
 
 
 def _allowed_origins() -> list[str]:
@@ -34,8 +46,8 @@ def _allowed_origins() -> list[str]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", seller_auth.HEADER],
     allow_credentials=False,
 )
 
@@ -254,6 +266,20 @@ def _seller(seller_id: str) -> str:
     return seller_id
 
 
+def _owner(action: str):
+    """A dependency: the seller id from the path, once the caller proved they control it."""
+
+    def dependency(seller_id: str, x_trustlock_auth: str | None = Header(default=None)) -> str:
+        seller = _seller(seller_id)
+        try:
+            seller_auth.verify(x_trustlock_auth, seller, action)
+        except seller_auth.AuthError as exc:
+            raise ApiError(exc.status, exc.code, exc.message) from None
+        return seller
+
+    return dependency
+
+
 def _provider(provider_id: str) -> Provider:
     if provider_id not in REGISTRY:
         raise ApiError(404, "ERR_UNKNOWN_PROVIDER", "No agent provider with that id.")
@@ -276,30 +302,30 @@ def seller_agent(seller_id: str) -> dict:
 
 
 @app.put("/sellers/{seller_id}/agent")
-def seller_agent_set_provider(seller_id: str, body: ProviderIn) -> dict:
-    keys.set_provider(_seller(seller_id), _provider(body.provider).id)
+def seller_agent_set_provider(body: ProviderIn, seller_id: str = Depends(_owner("set_provider"))) -> dict:
+    keys.set_provider(seller_id, _provider(body.provider).id)
     return keys.status(seller_id)
 
 
 @app.put("/sellers/{seller_id}/agent/key")
-def seller_agent_set_key(seller_id: str, body: KeyIn) -> dict:
+def seller_agent_set_key(body: KeyIn, seller_id: str = Depends(_owner("set_key"))) -> dict:
     """Save or rotate the key. The response shows only its last 4 characters."""
     try:
-        keys.set_key(_seller(seller_id), body.api_key.get_secret_value())
+        keys.set_key(seller_id, body.api_key.get_secret_value())
     except KeyStoreError as exc:
         raise _keystore_error(exc) from None
     return keys.status(seller_id)
 
 
 @app.delete("/sellers/{seller_id}/agent/key")
-def seller_agent_delete_key(seller_id: str) -> dict:
-    deleted = keys.delete_key(_seller(seller_id))
+def seller_agent_delete_key(seller_id: str = Depends(_owner("delete_key"))) -> dict:
+    deleted = keys.delete_key(seller_id)
     return {**keys.status(seller_id), "deleted": deleted}
 
 
 @app.post("/sellers/{seller_id}/agent/test")
-def seller_agent_test(seller_id: str) -> dict:
-    seller = _seller(seller_id)
+def seller_agent_test(seller_id: str = Depends(_owner("test"))) -> dict:
+    seller = seller_id
     provider = _provider(keys.get(seller).provider)
     try:
         with keys.use_key(seller) as api_key:
@@ -312,10 +338,10 @@ def seller_agent_test(seller_id: str) -> dict:
 
 
 @app.post("/sellers/{seller_id}/agent/ask")
-def seller_agent_ask(seller_id: str, body: AskIn) -> dict:
+def seller_agent_ask(body: AskIn, seller_id: str = Depends(_owner("ask"))) -> dict:
     """Run the seller's agent on one message. It can read, check, recommend and prepare unsigned
     transactions; no provider has a tool that moves funds."""
-    seller = _seller(seller_id)
+    seller = seller_id
     provider = _provider(keys.get(seller).provider)
     refusal = screen(body.message)
     if refusal is not None:

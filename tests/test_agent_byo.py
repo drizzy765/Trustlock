@@ -20,7 +20,10 @@ from app.keystore import KEK_ENV, KeyStoreError, seal, unseal  # noqa: E402
 from app.providers import REGISTRY  # noqa: E402
 from app.tools import TOOL_SPECS, Toolbox  # noqa: E402
 
-client = TestClient(main.app)
+from seller_signing import Signer, SigningClient, install  # noqa: E402
+
+SIGNER = Signer()
+client = SigningClient(TestClient(main.app), SIGNER)
 SELLER = "adaora.testnet"
 KEY = "sk-ant-test-0123456789abcdefWXYZ"
 INJECTION = json.loads((ROOT / "tests" / "fixtures" / "injection_receipt.json").read_text())
@@ -29,6 +32,7 @@ INJECTION = json.loads((ROOT / "tests" / "fixtures" / "injection_receipt.json").
 @pytest.fixture(autouse=True)
 def kek(monkeypatch):
     monkeypatch.setenv(KEK_ENV, base64.b64encode(os.urandom(32)).decode())
+    install(monkeypatch, SIGNER, {SELLER})
     main.keys.clear()
     yield
     main.keys.clear()

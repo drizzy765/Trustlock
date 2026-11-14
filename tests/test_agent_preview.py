@@ -165,3 +165,51 @@ def test_injection_receipt_is_not_confirmed():
     assert result["verdict"] != "CONFIRMED"
     assert result["funding_allowed"] is False
     assert result["injection_detected"] is True
+
+
+# --- USDC prices: price_ngn is the draft unit, USDC x 1000 -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,item,price",
+    [
+        ("I want to buy a blue ankara dress for 12 USDC, deliver tomorrow", "blue ankara dress", 12000),
+        ("abeg hold the black sandal $12", "black sandal", 12000),
+        ("red handbag 12 usdc", "red handbag", 12000),
+        ("USDC 12 for 2 bags of rice", "2 bags of rice", 12000),
+        ("hold the shoes for 12.50usdc", "shoes", 12500),
+        ("send 3 shirts for $1,200 in 2 days", "send 3 shirts", 1_200_000),
+        ("iPhone 13 for 300 USDC", "iPhone 13", 300_000),
+    ],
+)
+def test_usdc_prices(text, item, price):
+    out = preview_terms(text)
+    assert set(out) == TERMS
+    assert out["currency"] == "USDC"
+    assert out["price_ngn"] == price
+    assert out["item"] == item
+    assert out["warning"] is None
+
+
+def test_usdc_digits_are_not_read_as_naira():
+    out = preview_terms("USDC 150 for 2 bags rice")
+    assert out["price_ngn"] == 150_000 and out["currency"] == "USDC" and out["warning"] is None
+
+
+def test_usdc_and_naira_together_warn():
+    out = preview_terms("hold sneakers 15 USDC or 20000 naira")
+    assert out["currency"] == "USDC" and out["price_ngn"] == 15000
+    assert "15 USDC" in out["warning"] and "20000 NGN" in out["warning"]
+
+
+def test_naira_stays_naira():
+    out = preview_terms("I want to buy a red handbag for 12000 naira")
+    assert out["currency"] == "NGN" and out["price_ngn"] == 12000
+
+
+def test_usdc_preview_over_http():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    out = TestClient(app).post("/deals/preview", json={"text": "Blue ankara dress, 12 USDC, deliver tomorrow"}).json()
+    assert out["currency"] == "USDC" and out["price_ngn"] == 12000 and out["item"] == "Blue ankara dress"

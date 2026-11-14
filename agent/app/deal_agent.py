@@ -96,7 +96,7 @@ def _safe_value(tier: int, match: re.Match[str]) -> int | None:
 
 def _amounts(text: str) -> list[tuple[int, int, int]]:
     """Every (tier, position, naira) found, best evidence first within the same position."""
-    folded = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", normalise(text))
+    folded = _without_usdc(text)
     found = []
     for tier, pattern in _AMOUNT_TIERS:
         for match in pattern.finditer(folded):
@@ -104,6 +104,55 @@ def _amounts(text: str) -> list[tuple[int, int, int]]:
             if amount is not None and MIN_PLAUSIBLE_NGN <= amount <= MAX_PLAUSIBLE_NGN:
                 found.append((tier, match.start(), amount))
     return found
+
+
+# --- USDC amounts -------------------------------------------------------------------------------
+# Escrow is USDC. A USDC price is returned in the draft price unit: USDC x 1000 (so 12 USDC is
+# 12000, and 12000 x 1000 = 12,000,000 base units, USDC having 6 decimals).
+
+USDC_PRICE_SCALE = 1000
+MAX_PLAUSIBLE_USDC = MAX_PLAUSIBLE_NGN / USDC_PRICE_SCALE
+_USDC_WORD = r"(?:usdc|usd|dollars?)"
+_USDC_PATTERNS = [
+    re.compile(r"\$\s*(\d+(?:\.\d+)?)(?![\d.]*\d)"),  # $12, $ 12.50
+    re.compile(rf"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*{_USDC_WORD}(?![a-z0-9])"),  # 12 USDC, 12usdc
+    re.compile(r"(?<![a-z0-9])(?:usdc|usd)\s*(\d+(?:\.\d+)?)(?![a-z0-9]|\.\d)"),  # USDC 12
+]
+
+
+def _fold(text: str) -> str:
+    return re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", normalise(text))
+
+
+def _usdc_matches(folded: str) -> list[tuple[int, int, float]]:
+    """Every (start, end, usdc) in already-folded text, in order of appearance."""
+    found: dict[int, tuple[int, int, float]] = {}
+    for pattern in _USDC_PATTERNS:
+        for match in pattern.finditer(folded):
+            try:
+                value = float(match.group(1))
+            except (OverflowError, ValueError):
+                continue
+            if 0 < value <= MAX_PLAUSIBLE_USDC and match.start() not in found:
+                found[match.start()] = (match.start(), match.end(), value)
+    return sorted(found.values())
+
+
+def usdc_amounts(text: str) -> list[float]:
+    """The different USDC amounts in order of appearance ("$12", "12 USDC", "USDC 12")."""
+    seen: list[float] = []
+    for _, _, value in _usdc_matches(_fold(text)):
+        if value not in seen:
+            seen.append(value)
+    return seen
+
+
+def _without_usdc(text: str) -> str:
+    """The folded text with every USDC amount blanked out, so its digits are not read as naira."""
+    folded = _fold(text)
+    for start, end, _ in _usdc_matches(folded):
+        folded = folded[:start] + " " * (end - start) + folded[end:]
+    return folded
 
 
 def parse_amount_ngn(text: str) -> int | None:
@@ -165,6 +214,23 @@ _DROP_PHRASES = sorted(
 )  # fmt: skip
 _PRICE_TOKEN = re.compile(r"^(?:₦|ngn|n)?(\d[\d,]*)(?:\.(\d+))?(?:(k)(\d*))?$")
 _CURRENCY_TOKENS = {"₦", "ngn", "naira"}
+_USDC_TOKENS = {"$", "usdc", "usd", "dollar", "dollars"}
+_USDC_TOKEN = re.compile(r"^(?:\$|usdc|usd)?(\d+(?:\.\d+)?)(usdc|usd|dollars?)?$")
+
+
+def _is_usdc_token(norm: list[str], i: int, usdc: set[float]) -> bool:
+    """True for a USDC amount token: "$12", "12usdc", "usdc12", or "12" next to a USDC word."""
+    token = norm[i]
+    if token in _USDC_TOKENS:
+        return bool(usdc)
+    plain = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", token)
+    match = _USDC_TOKEN.match(plain)
+    if not match or float(match.group(1)) not in usdc:
+        return False
+    if plain != match.group(1):  # the currency is attached
+        return True
+    beside = {norm[j] for j in (i - 1, i + 1) if 0 <= j < len(norm)}
+    return bool(beside & _USDC_TOKENS)
 _EDGE_PUNCTUATION = ".,;:!?()\"'"
 
 
@@ -186,6 +252,7 @@ def extract_item(text: str) -> str:
     original = [t for t in original if t]
     norm = [normalise(t) for t in original]
     prices = set(_distinct_amounts(text))
+    usdc = set(usdc_amounts(text))
     kept: list[str] = []
     i = 0
     while i < len(norm):
@@ -212,12 +279,19 @@ def extract_item(text: str) -> str:
         if token.isdigit() and i + 1 < len(norm) and norm[i + 1] in ("day", "days", "ojo"):
             i += 2
             continue
+        if _is_usdc_token(norm, i, usdc):
+            i += 1
+            continue
         if token in _CURRENCY_TOKENS or _token_value(token) in prices:
             i += 1
             continue
         kept.append(original[i])
         i += 1
     return " ".join(kept).strip(" ,.") or "item"
+
+
+def _usdc_label(value: float) -> str:
+    return f"{value:g}"
 
 
 # --- the preview --------------------------------------------------------------------------------
@@ -228,7 +302,8 @@ def preview_terms(text: str, language_hint: str | None = None) -> dict[str, Any]
 
     A refusal is ``{"refused": True, "code", "reason", "language", "message"}``: it never repeats
     the user's text and never contains a key. Terms are ``{item, price_ngn, currency,
-    deadline_hours, language, notes, warning}`` and are never signed.
+    deadline_hours, language, notes, warning}`` and are never signed. With ``currency`` "USDC",
+    ``price_ngn`` is USDC x 1000 (the draft price unit); with "NGN" it is naira.
     """
     language = language_hint if language_hint in LANGUAGES else detect_language(text)
     refusal = screen(text)
@@ -240,17 +315,26 @@ def preview_terms(text: str, language_hint: str | None = None) -> dict[str, Any]
             "language": language,
             "message": refusal_message(refusal, language),
         }
-    amounts = _distinct_amounts(text)
-    price = parse_amount_ngn(text)
+    usdc = usdc_amounts(text)
+    naira = _distinct_amounts(text)
+    if usdc:
+        # A USDC amount wins: escrow is USDC. price_ngn carries it in the draft unit (USDC x 1000).
+        currency = "USDC"
+        price = round(usdc[0] * USDC_PRICE_SCALE)
+        labels = [f"{_usdc_label(v)} USDC" for v in usdc] + [f"{n} NGN" for n in naira]
+    else:
+        currency = "NGN"
+        price = parse_amount_ngn(text)
+        labels = [str(n) for n in naira]
     warning = None
     if price is None:
         warning = "No price found: confirm the amount with the buyer."
-    elif len(amounts) > 1:
-        warning = f"More than one amount found ({', '.join(map(str, amounts))}): confirm the price."
+    elif len(labels) > 1:
+        warning = f"More than one amount found ({', '.join(labels)}): confirm the price."
     return {
         "item": extract_item(text),
         "price_ngn": price,
-        "currency": "NGN",
+        "currency": currency,
         "deadline_hours": parse_deadline_hours(text),
         "language": language,
         "notes": [],
