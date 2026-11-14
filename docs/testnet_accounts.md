@@ -16,6 +16,11 @@ history below. The on-chain code was verified byte-identical to this branch
 (sha256 matches code hash `HbubgDJrKngoPvYz76qGJDA3b6kBiDCGjY1zrSKz44hS`),
 so no redeploy was needed.
 
+### Account creation (faucet-funded)
+
+- **Transaction:** https://testnet.nearblocks.io/txns/4r4M6LfU521SwPULA34MVVSjsGtdWVFiMBZU3hywewc8
+- **Account:** `trustlock-v2-timi.testnet` created via faucet
+
 ### Deployment + init (single `with-init-call new` transaction)
 
 - **Transaction:** https://testnet.nearblocks.io/txns/G5Yh8kmEDVRxNJQgPeL2eNRzA8N5GBBuSUsCahJFdG26
