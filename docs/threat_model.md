@@ -42,9 +42,9 @@ Status: **holds** (in the code today), **gap** (see the finding), **planned** (n
 | Fake naira funding | Deterministic verdict; screenshot-only is never CONFIRMED; A02-A04 | holds |
 | Quote swapped in the UI | Verify 1Click signature; I03 | planned |
 | Agent host dumped | No payout key on that host; A06 | holds |
-| Deadline griefing (rider never comes) | Payer refund after `deadline_ms` | holds, but **gap M-2** if the refund transfer fails and **gap L-3** for far deadlines |
-| Goods damaged but scanned | `open_dispute` | **gap H-2**: nothing resolves a dispute, so the funds stay locked; **gap M-3**: a dispute during a payout is erased |
-| Payout transfer fails | Callback restores `Funded` | **gap M-1**: the rider cannot retry (QR stays used) |
+| Deadline griefing (rider never comes) | Payer refund after `deadline_ms`; a failed refund restores `Funded` and can be retried (fixed in #58) | holds, but **gap L-3** for far deadlines |
+| Goods damaged but scanned | `open_dispute`, then `resolve_dispute` by owner or arbiter, or buyer `claim_dispute_timeout_refund` after 7 days (fixed in #58, H-2); status locks before the transfer so a second call is rejected (M-5) | holds; residual M-3 noted in the review |
+| Payout transfer fails | Callback restores the pre-call status and frees the QR, so the rider can retry (fixed in #58, M-1) | holds |
 | Storage drain | None | **gap M-4**: `create_deal` is free and unbounded |
 
 ## What we accept (v1)
