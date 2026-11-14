@@ -9,6 +9,8 @@
 
 ---
 
+> **Superseded in part (14 Nov 2026):** the "Glass Vault" look below was replaced by **"Solid Vault"** when the redesign shipped. Section 14 at the end of this file is the locked design contract the code follows. Where they disagree, section 14 wins.
+
 ## 1. Brief
 
 ```text
@@ -455,3 +457,28 @@ The current stack: Next.js 15 + React 19, **no Tailwind, no shadcn**, inline sty
 ---
 
 *Researched 11 Nov 2026 from live sites (screenshots and CSS of paybox.sh, near.org, flutterwave.com, privy.io, phantom.com, linear.app) and public docs. Refero and Mobbin MCPs were unavailable (inactive subscriptions).*
+
+---
+
+## 14. Addendum: "Solid Vault" design contract (shipped in the web redesign PR)
+
+This replaces "Glass Vault" so the doc and the code agree. It came out of a review against eight design-rule repos (taste-skill, no-slop-ui, avoid-ai-design, anti-slop, Netxeo skill-file-design, design-guide, web-design-skills, huashu-design).
+
+**Reading this as:** a payment-flow web app plus one landing page, for social-commerce sellers and their buyers and riders (Lagos, Nairobi, Accra), in a solid dark vault language, leaning on Stripe Checkout and Wise's tracker. Dials: energy 2, rhythm 2, motion 2 (state moments only).
+
+| Field | Locked value |
+|---|---|
+| Colour | `ink-950 #0B0C0B` canvas, `ink-900 #131513` raised, `ink-800 #1C1F1C` inputs and hover, `line #2A2E2A` hairlines, `line-strong #666C66` control boundaries (3.4:1 on ink-900; the plan's `#3A3F3A` measured 1.8:1 and was raised), `bone #F4F2EE` text and primary button, `mute #A3A8A2` secondary text, `faint #8A9089` meta. State only: `lock #F2B544` funded, `release #5BC08A` delivered and released, `refund #6EA8FE` expired and refunded, `danger #F0616D` errors and disputes. No new hex in components. |
+| Type | Geist 400/500 and Geist Mono (`next/font/google`). Display 64/40, h1 40/32, h2 28, h3 20, body 16. No eyebrow labels. Mono only for chain data: amounts, accounts, hashes, delivery codes, contract id. |
+| Radius | 6 inputs and chips, 8 buttons, 12 cards, 16 QR card, dialog and scanner. 999 only for StatusBadge and the network chip. |
+| Spacing | 4px base. Flow pages are a left-aligned 640px column inside the 1200px grid. |
+| Depth | Borders, not shadows. Only the dialog has a shadow (`0 4px 16px rgba(0,0,0,.5)`). No blur, glow, glass or gradients anywhere. |
+| Motion | `motion/react` with `MotionConfig reducedMotion="user"`. Hero entrance once; 150 ms page fade; status step 240 ms with a pulse that plays twice; lock 600 ms; release shackle lift, 0.5 s hold, then the text, and the final frame holds; the scan sweep is the only loop and runs only while the camera is on. Ease-out only, no bounce. |
+| Signature | **LockMark**: the logo's padlock as an inline SVG. Created is an outline, funded has an amber keyhole, released lifts the shackle 6px with a green keyhole, refunded has a blue keyhole. |
+| Shared components | SiteNav, SiteFooter, StatusBadge, ChainValue, AmountDisplay, DealTimeline, LockMark, QrCard, ScannerFrame, ReleaseMoment, Button (`web/components/`). |
+| Imagery | Six real Pexels photos (credits in `web/public/photos/CREDITS.md` and the footer). No captions presenting models as TrustLock users. No text on photos. |
+| Pricing | Escrow is USDC only. Sellers may type a price in NGN, KES, GHS, ZAR, EGP or XOF; `web/lib/fx.ts` converts it to USDC in the browser (open.er-api.com, falling back to the fawazahmed0 currency API), and the USDC amount is what the draft stores and the buyer locks. |
+| Checks | `node detect.mjs web/app web/components` (avoid-ai-design) exits clean. Allowed ignores: `T2, T4` in `layout.tsx` (Geist is the wordmark face) and `SD4m` in ChainValue and AmountDisplay (mono for chain data). |
+
+Change control: a change to flow, information priority or state handling goes back to the product owner. Implementation details are recorded in the PR.
+

@@ -1,10 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ChevronDown, ScanLine, Wallet } from "lucide-react";
 import { initNear, isSignedIn, getAccountId, signIn, confirmDelivery, getDeal, getExplorerUrl } from "@/lib/near";
+import { contractId } from "@/lib/config";
 import { fetchHealth, type Mode } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input, Textarea, Label, Hint } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import ScannerFrame from "@/components/ScannerFrame";
+import StatusBadge from "@/components/StatusBadge";
+import ChainValue from "@/components/ChainValue";
+import AmountDisplay from "@/components/AmountDisplay";
+import ReleaseMoment from "@/components/ReleaseMoment";
+import NetworkChip from "@/components/NetworkChip";
+import { explorerAccountUrl, usdcFromBaseUnits } from "@/lib/format";
 
 export default function ScanPage() {
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -15,6 +28,9 @@ export default function ScanPage() {
   const [result, setResult] = useState<any>(null);
   const [mode, setMode] = useState<Mode>("demo");
   const [dealInfo, setDealInfo] = useState<any>(null);
+  // UI only: a decoded camera scan waits here until the code field holds it, then submits.
+  const [scanned, setScanned] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     initNear().then(() => {
@@ -24,6 +40,9 @@ export default function ScanPage() {
     fetchHealth().then((health) => {
       if (health?.mode) setMode(health.mode);
     });
+    // ?deal=<id> prefills the deal field (from a rider's link).
+    const fromLink = new URLSearchParams(window.location.search).get("deal");
+    if (fromLink && /^\d+$/.test(fromLink)) setDealId(fromLink);
   }, []);
 
   async function handleConnect() {
@@ -69,15 +88,15 @@ export default function ScanPage() {
       let userMessage = "Failed to confirm delivery.";
       
       if (errorMessage.includes("ERR_REPLAYED_QR")) {
-        userMessage = "❌ This QR code was already used. Replay rejected.";
+        userMessage = "This code was already used. Nothing was paid twice.";
       } else if (errorMessage.includes("ERR_NOT_RIDER")) {
-        userMessage = "❌ Only the assigned rider can confirm this delivery.";
+        userMessage = "Only the assigned rider can confirm this delivery.";
       } else if (errorMessage.includes("ERR_ALREADY_RELEASED")) {
-        userMessage = "❌ Funds were already released for this deal.";
+        userMessage = "Funds were already released for this deal.";
       } else if (errorMessage.includes("ERR_DEADLINE")) {
-        userMessage = "❌ Deal deadline has passed.";
+        userMessage = "The deal deadline has passed.";
       } else if (errorMessage.includes("ERR_BAD_STATUS")) {
-        userMessage = "❌ Deal is not in Funded status.";
+        userMessage = "This deal isn’t locked (Funded), so there’s nothing to release.";
       }
       
       setResult({
@@ -91,248 +110,192 @@ export default function ScanPage() {
   }
 
   const isConnected = !!accountId;
+  const canSubmit = Boolean(dealId && qrInput.trim() && !isSubmitting && isConnected && mode !== "demo");
+
+  // A camera decode fills the existing code field, then goes through the existing submit.
+  useEffect(() => {
+    if (scanned === null || qrInput !== scanned) return;
+    setScanned(null);
+    if (canSubmit) void handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanned, qrInput]);
+
+  // No endless spinner: after 10 s, say what's going on.
+  useEffect(() => {
+    if (!isSubmitting) {
+      setSlow(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSlow(true), 10_000);
+    return () => window.clearTimeout(t);
+  }, [isSubmitting]);
+
+  const replayed = result && !result.success && String(result.error ?? "").includes("ERR_REPLAYED_QR");
+  const amount = dealInfo ? usdcFromBaseUnits(dealInfo.price) : 0;
 
   return (
-    <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ margin: 0 }}>Rider — Confirm Delivery</h1>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#888" }}>App mode:</span>
-          <ModeBadge mode={mode} />
-        </div>
-      </div>
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-[32px] leading-tight md:text-[40px]">Confirm a delivery</h1>
+        <span className="flex items-center gap-2 text-sm text-faint">
+          App mode <ModeBadge mode={mode} />
+        </span>
+      </header>
+      <p className="mt-2 text-mute">For riders. Scan the buyer&rsquo;s one-time code at the door and the seller is paid.</p>
 
-      {/* Wallet Connection */}
-      <div style={{ 
-        background: "#1a1a1a", 
-        padding: 16, 
-        borderRadius: 8, 
-        marginBottom: 24,
-        border: "1px solid #333"
-      }}>
+      <div className="mt-6 flex min-h-11 flex-wrap items-center gap-3">
         {isLoading ? (
-          <p>Loading wallet...</p>
+          <p role="status" className="text-mute">
+            Checking your wallet…
+          </p>
         ) : isConnected ? (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Rider Account: <strong>{accountId}</strong></span>
-            <span style={{ 
-              background: "#22c55e", 
-              color: "#000", 
-              padding: "4px 8px", 
-              borderRadius: 4,
-              fontSize: 12,
-              fontWeight: "bold"
-            }}>
-              testnet
-            </span>
-          </div>
+          <p className="flex min-w-0 items-center gap-2 text-[15px] text-mute">
+            <Wallet aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 text-faint" />
+            Rider <ChainValue value={accountId as string} label="your account" />
+            <NetworkChip />
+          </p>
         ) : (
-          <button 
-            onClick={handleConnect}
-            style={{
-              background: "#22c55e",
-              color: "#000",
-              border: "none",
-              padding: "12px 24px",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: 14
-            }}
-          >
-            Connect Rider Wallet
-          </button>
+          <Button variant="secondary" onClick={handleConnect}>
+            <Wallet aria-hidden="true" strokeWidth={1.5} />
+            Connect rider wallet
+          </Button>
         )}
       </div>
 
-      {/* Deal Lookup */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>Deal ID</h3>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="number"
+      {/* Deal lookup */}
+      <section className="mt-8">
+        <Label htmlFor="scan-deal">Deal number</Label>
+        <div className="flex gap-2">
+          <Input
+            id="scan-deal"
+            inputMode="numeric"
+            autoComplete="off"
+            className="font-mono tabular"
             value={dealId}
-            onChange={(e) => setDealId(e.target.value)}
-            placeholder="Enter deal ID (e.g., 1)"
-            style={{
-              flex: 1,
-              padding: 12,
-              background: "#1a1a1a",
-              color: "#fff",
-              border: "1px solid #333",
-              borderRadius: 6,
-              fontSize: 14
-            }}
+            onChange={(e) => setDealId(e.target.value.replace(/\D/g, ""))}
+            placeholder="12"
           />
-          <button
-            onClick={lookupDeal}
-            disabled={!dealId || mode === "demo"}
-            style={{
-              padding: "12px 20px",
-              background: mode === "demo" ? "#444" : "#3b82f6",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: mode === "demo" ? "not-allowed" : "pointer",
-              fontWeight: "bold"
-            }}
-          >
-            Lookup
-          </button>
+          <Button variant="secondary" onClick={lookupDeal} disabled={!dealId || mode === "demo"}>
+            Look up
+          </Button>
         </div>
-        
-        {dealInfo && (
-          <div style={{ 
-            marginTop: 12,
-            padding: 12, 
-            background: "#1a1a1a", 
-            borderRadius: 6,
-            border: "1px solid #333"
-          }}>
-            <h4 style={{ marginTop: 0 }}>Deal #{dealInfo.deal_id}</h4>
-            <p style={{ margin: "4px 0" }}>Status: <strong>{dealInfo.status}</strong></p>
-            <p style={{ margin: "4px 0" }}>Item: {dealInfo.item}</p>
-            <p style={{ margin: "4px 0" }}>Price: {(dealInfo.price / 1000000).toFixed(2)} USDC</p>
-            <p style={{ margin: "4px 0" }}>Seller: {dealInfo.seller}</p>
-            <p style={{ margin: "4px 0" }}>Buyer: {dealInfo.buyer}</p>
-          </div>
-        )}
-      </div>
-
-      {/* QR Input */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>Scan Buyer QR Code</h3>
-        <p style={{ color: "#888", fontSize: 14 }}>
-          Enter the one-time QR code from the buyer to confirm delivery.
-          <br />
-          <span style={{ color: "#f87171" }}>Replayed QR codes will fail on-chain.</span>
-        </p>
-        
-        {/* Camera placeholder */}
-        <div style={{ 
-          background: "#1a1a1a", 
-          border: "2px dashed #333",
-          borderRadius: 8,
-          padding: 40,
-          textAlign: "center",
-          marginBottom: 16
-        }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>📷</div>
-          <p style={{ color: "#888", margin: 0 }}>
-            Camera access not implemented in demo
-          </p>
-          <p style={{ color: "#666", fontSize: 12, margin: "8px 0 0 0" }}>
-            Use text input below
-          </p>
-        </div>
-        
-        <textarea
-          value={qrInput}
-          onChange={(e) => setQrInput(e.target.value)}
-          placeholder="Paste QR code data here..."
-          rows={4}
-          style={{
-            width: "100%",
-            padding: 12,
-            background: "#1a1a1a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 6,
-            fontFamily: "monospace",
-            fontSize: 12,
-            resize: "vertical"
-          }}
-        />
-        
-        <button
-          onClick={handleSubmit}
-          disabled={!dealId || !qrInput.trim() || isSubmitting || !isConnected || mode === "demo"}
-          style={{
-            marginTop: 12,
-            width: "100%",
-            background: !isConnected || mode === "demo" ? "#444" : "#22c55e",
-            color: "#fff",
-            border: "none",
-            padding: "14px 24px",
-            borderRadius: 6,
-            cursor: !isConnected || mode === "demo" ? "not-allowed" : "pointer",
-            fontWeight: "bold",
-            fontSize: 16
-          }}
-        >
-          {!isConnected 
-            ? "Connect Wallet to Submit" 
-            : mode === "demo"
-              ? "Confirm Delivery (demo — disabled)"
-              : isSubmitting 
-                ? "Submitting..." 
-                : "Confirm Delivery"
-          }
-        </button>
-        
-        {mode === "demo" && (
-          <p style={{ color: "#fbbf24", fontSize: 12, marginTop: 8 }}>
-            Switch to &quot;live&quot; mode to submit on-chain
-          </p>
-        )}
-      </div>
-
-      {/* Result */}
-      {result && (
-        <div style={{ 
-          background: result.success ? "#064e3b" : "#7f1d1d", 
-          padding: 16, 
-          borderRadius: 8, 
-          border: "1px solid",
-          borderColor: result.success ? "#22c55e" : "#ef4444"
-        }}>
-          <h4 style={{ marginTop: 0 }}>
-            {result.success ? "✅ Success" : "❌ Failed"}
-          </h4>
-          <p>{result.message}</p>
-          {result.tx_hash && (
-            <div style={{ marginTop: 12 }}>
-              <p style={{ margin: "4px 0", fontSize: 12, color: "#888" }}>
-                Transaction: <code>{result.tx_hash}</code>
+        {dealInfo ? (
+          <Card className="mt-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[20px] font-medium">
+                Deal #{dealId}
+                <span className="sr-only">,</span>
               </p>
-              <a 
-                href={getExplorerUrl(result.tx_hash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#3b82f6", fontSize: 12 }}
-              >
-                View on Explorer →
-              </a>
+              <StatusBadge status={dealInfo.status} />
             </div>
-          )}
-          {result.error && (
-            <details style={{ marginTop: 8 }}>
-              <summary style={{ color: "#888", fontSize: 12, cursor: "pointer" }}>Technical details</summary>
-              <pre style={{ fontSize: 10, color: "#666", marginTop: 8 }}>{result.error}</pre>
-            </details>
-          )}
-        </div>
-      )}
+            <p className="mt-1 break-words text-mute">{dealInfo.item}</p>
+            <AmountDisplay className="mt-4" amount={amount} size="md" />
+            <dl className="mt-4 grid grid-cols-[64px_1fr] gap-x-4 gap-y-2 border-t border-line pt-4 text-[15px]">
+              <dt className="text-faint">Seller</dt>
+              <dd className="min-w-0">
+                <ChainValue value={dealInfo.seller} href={explorerAccountUrl(dealInfo.seller)} label="seller account" />
+              </dd>
+              <dt className="text-faint">Buyer</dt>
+              <dd className="min-w-0">
+                <ChainValue value={dealInfo.buyer} href={explorerAccountUrl(dealInfo.buyer)} label="buyer account" />
+              </dd>
+            </dl>
+          </Card>
+        ) : null}
+      </section>
 
-      {/* Info */}
-      <div style={{ 
-        marginTop: 32, 
-        padding: 16, 
-        background: "#1a1a1a", 
-        borderRadius: 8,
-        border: "1px solid #333",
-        fontSize: 12,
-        color: "#888"
-      }}>
-        <p style={{ margin: "0 0 8px 0" }}>
-          <strong>Security Note:</strong> The rider key is restricted to only call 
-          <code>confirm_delivery</code>. It cannot move funds or access other deals.
+      {/* Scan, or paste */}
+      <section className="mt-10" aria-labelledby="scan-title">
+        <h2 id="scan-title" className="text-[20px]">
+          Scan the buyer&rsquo;s code
+        </h2>
+        <p className="mt-1 mb-5 text-[15px] text-mute">Each code works once. A code that was already used is rejected on-chain.</p>
+
+        <ScannerFrame
+          onDecode={(text) => {
+            setResult(null);
+            setScanned(text);
+            setQrInput(text);
+          }}
+          success={Boolean(result?.success)}
+          failed={Boolean(result && !result.success)}
+          disabled={isSubmitting}
+        />
+
+        {result?.success ? (
+          <Card className="mt-6 p-5 md:p-6">
+            <ReleaseMoment amount={amount} txHash={result.tx_hash} title={dealInfo?.status === "Released" ? "Released." : "Delivered."} />
+          </Card>
+        ) : null}
+
+        <details className="group mt-6 rounded-[12px] border border-line bg-ink-900" open={!result?.success}>
+          <summary className="flex h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 text-bone">
+            Paste code instead
+            <ChevronDown aria-hidden="true" strokeWidth={1.5} className="size-5 text-faint transition-transform duration-200 group-open:rotate-180" />
+          </summary>
+          <div className="px-5 pb-5">
+            <Label htmlFor="scan-code" className="sr-only">
+              Delivery code
+            </Label>
+            <Textarea
+              id="scan-code"
+              value={qrInput}
+              onChange={(e) => setQrInput(e.target.value)}
+              placeholder="64-character delivery code"
+              rows={3}
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="none"
+              className="resize-y font-mono text-[14px]"
+            />
+          </div>
+        </details>
+
+        <Button className="mt-4" block size="lg" onClick={handleSubmit} disabled={!canSubmit && !isSubmitting} loading={isSubmitting}>
+          {!isConnected ? (
+            "Connect your wallet to confirm"
+          ) : mode === "demo" ? (
+            "Confirm delivery (off in demo mode)"
+          ) : isSubmitting ? (
+            "Confirming on NEAR…"
+          ) : (
+            <>
+              <ScanLine aria-hidden="true" strokeWidth={1.5} />
+              Confirm delivery
+            </>
+          )}
+        </Button>
+        {slow ? (
+          <p role="status" className="mt-3 text-[15px] text-mute">
+            Still waiting for NEAR. Your code hasn&rsquo;t been used yet.
+          </p>
+        ) : null}
+        {mode === "demo" ? (
+          <Hint>The agent reports demo mode, so on-chain confirmation is off. Switch the deployment to live mode to submit.</Hint>
+        ) : null}
+
+        {result && !result.success ? (
+          <Alert className="mt-4" title={replayed ? "Code already used" : "Delivery not confirmed"}>
+            <p>{result.message}</p>
+            {result.error ? (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm text-faint">Technical details</summary>
+                <pre className="mt-2 overflow-x-auto font-mono text-[12px] whitespace-pre-wrap text-faint">{result.error}</pre>
+              </details>
+            ) : null}
+          </Alert>
+        ) : null}
+      </section>
+
+      <section className="mt-12 text-sm text-faint">
+        <p>
+          The rider key can only call <span className="font-mono text-mute">confirm_delivery</span>. It can&rsquo;t move funds or touch other deals.
         </p>
-        <p style={{ margin: 0 }}>
-          Network: {mode === "demo" ? "demo (no blockchain)" : "testnet"} | 
-          Contract: trustlock-v2-timi.testnet
+        <p className="mt-2 flex flex-wrap items-center gap-2">
+          <span>{mode === "demo" ? "Demo mode (no blockchain calls)." : "NEAR testnet."} Contract</span>
+          <ChainValue value={contractId} href={explorerAccountUrl(contractId)} label="contract id" />
         </p>
-      </div>
+      </section>
     </main>
   );
 }

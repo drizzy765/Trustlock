@@ -1,193 +1,107 @@
-/* TrustLock Glass Vault Theme */
-/* Design system: Dark "Glass Vault" with Geist fonts */
+/* TrustLock "Solid Vault" theme. Tokens are locked in docs/design_direction.md (addendum).
+   Colour only means deal state. Solid surfaces only, nothing decorative. */
+@import "tailwindcss";
 
-:root {
-  /* Background colors - dark vault */
-  --bg-primary: #0f1410;
-  --bg-card: rgba(26, 26, 26, 0.8);
-  --bg-input: rgba(17, 17, 17, 0.8);
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  
-  /* Glass effect */
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-backdrop: blur(10px);
-  
-  /* Text colors */
-  --text-primary: #f4efe4;
-  --text-secondary: #888888;
-  --text-muted: #666666;
-  
-  /* Accent colors */
-  --color-amber: #F2B544;
-  --color-green: #34D27B;
-  --color-blue: #6EA8FE;
-  --color-red: #F0616D;
-  
-  /* Status colors */
-  --status-created: #374151;
-  --status-funded: #1e3a8a;
-  --status-released: #064e3b;
-  --status-refunded: #7c2d12;
-  --status-disputed: #7f1d1d;
-  
-  /* Spacing */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  
-  /* Border radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+@theme {
+  --color-ink-950: #0b0c0b;
+  --color-ink-900: #131513;
+  --color-ink-800: #1c1f1c;
+  --color-line: #2a2e2a;
+  --color-line-strong: #666c66; /* 3.4:1 on ink-900: input and control boundaries reach 3:1 */
+  --color-bone: #f4f2ee;
+  --color-mute: #a3a8a2;
+  --color-faint: #8a9089;
+  --color-lock: #f2b544;
+  --color-release: #5bc08a;
+  --color-refund: #6ea8fe;
+  --color-danger: #f0616d;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --radius-input: 6px;
+  --radius-button: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+
+  --ease-ui: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Global styles */
-* {
-  box-sizing: border-box;
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    background: var(--color-ink-950);
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--color-ink-950);
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    background: var(--color-lock);
+    color: var(--color-ink-950);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-bone);
+    outline-offset: 2px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-faint);
+  }
 }
 
-html {
-  background: var(--bg-primary);
+@utility tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  min-height: 100vh;
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* The scan sweep is the only loop, and only while the camera is on. */
+@keyframes tl-sweep {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--sweep-distance, 240px));
+  }
 }
 
-/* Glass card component */
-.glass-card {
-  background: var(--bg-card);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  backdrop-filter: var(--glass-backdrop);
-  -webkit-backdrop-filter: var(--glass-backdrop);
+@media (prefers-reduced-motion: no-preference) {
+  .tl-sweep {
+    animation: tl-sweep 1.6s linear infinite alternate;
+  }
 }
 
-/* Input styles */
-input, textarea, select {
-  background: var(--bg-input);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  padding: 12px;
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+/* Wallet selector modal: keep it on our palette. */
+.nws-modal-wrapper .nws-modal {
+  --wallet-selector-background-color: var(--color-ink-900);
+  --wallet-selector-text-color: var(--color-bone);
 }
 
-input:focus, textarea:focus, select:focus {
-  border-color: var(--color-amber);
-  box-shadow: 0 0 0 2px rgba(242, 181, 68, 0.2);
-}
-
-input::placeholder, textarea::placeholder {
-  color: var(--text-secondary);
-}
-
-/* Button styles */
-button {
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 600;
-  transition: opacity 0.2s, transform 0.1s;
-}
-
-button:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-button:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* Status badges */
-.status-badge {
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.status-created {
-  background: var(--status-created);
-  color: #9ca3af;
-}
-
-.status-funded {
-  background: var(--status-funded);
-  color: var(--color-blue);
-}
-
-.status-released {
-  background: var(--status-released);
-  color: var(--color-green);
-}
-
-.status-refunded {
-  background: var(--status-refunded);
-  color: var(--color-amber);
-}
-
-.status-disputed {
-  background: var(--status-disputed);
-  color: var(--color-red);
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-input);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--text-secondary);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-primary);
-}
-
-/* Link styles */
-a {
-  color: var(--color-blue);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-a:hover {
-  color: var(--color-green);
-}
-
-/* Code styles */
-code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px;
-}
-
-/* Selection color */
-::selection {
-  background: var(--color-amber);
-  color: #000;
+@keyframes tl-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
