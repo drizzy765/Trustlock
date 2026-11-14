@@ -89,3 +89,32 @@ def test_a_matching_alert_is_still_confirmed():
     result = check_receipt(matching())
     assert result["verdict"] == "CONFIRMED"
     assert result["funding_allowed"] is True
+
+
+def test_a04_mobile_money_screenshot_only_is_never_confirmed():
+    """M-Pesa / MoMo / Wave context only: no live rail, screenshot alone never funds."""
+    payload = {
+        "image_spec": {
+            "style": "mpesa",
+            "provider": "M-PESA",
+            "amount": 5000,
+            "currency": "KES",
+            "reference": "MPESA-0001",
+            "recipient": "Nairobi seller",
+            "status": "SUCCESS",
+            "narration": "M-Pesa message for the black sandal",
+        },
+        "evidence": {
+            "bank_alerts": [],
+            "mobile_money_alerts": [],
+            "prior_payments": [],
+            "seller_expected": SELLER,
+        },
+    }
+    result = check_receipt(payload)
+    assert result["verdict"] == "NOT_FOUND"
+    assert result["verdict"] != "CONFIRMED"
+    assert result["funding_allowed"] is False
+    http_result = client.post("/receipts/check", json=payload).json()
+    assert http_result["verdict"] == "NOT_FOUND"
+    assert http_result["funding_allowed"] is False
