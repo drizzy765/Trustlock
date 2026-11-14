@@ -178,7 +178,7 @@ export default function SellerOnboardPage() {
 
   async function nativeShare() {
     try {
-      await navigator.share({ title: "TrustLock payment link", text: shareText(), url: shareableLink });
+      await navigator.share({ title: "Podlock payment link", text: shareText(), url: shareableLink });
     } catch {
       /* share sheet dismissed */
     }

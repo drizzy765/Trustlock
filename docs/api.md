@@ -278,9 +278,9 @@ The agent checks the signature, that action and seller match the request, that t
 5 minutes old (and not more than 1 minute in the future), and that the nonce is new. It then calls
 NEAR RPC `view_access_key`: the key must be on the seller account, either full access or a
 function-call key scoped to `TRUSTLOCK_CONTRACT_ID` (the key the seller's wallet adds when they
-sign in to TrustLock; set `TRUSTLOCK_AUTH_FULL_ACCESS_ONLY=1` to refuse those). Errors: 401
+sign in to Podlock; set `TRUSTLOCK_AUTH_FULL_ACCESS_ONLY=1` to refuse those). Errors: 401
 `ERR_AUTH_REQUIRED`, `ERR_AUTH_INVALID`, `ERR_AUTH_EXPIRED`, `ERR_AUTH_REPLAY`; 403 `ERR_NOT_OWNER`;
-502 `ERR_RPC`. The web app signs with the wallet's TrustLock key in `web/lib/seller-auth.ts`.
+502 `ERR_RPC`. The web app signs with the wallet's Podlock key in `web/lib/seller-auth.ts`.
 
 Limits: the nonce cache is in memory (one instance), and storage is in memory, like the drafts.
 

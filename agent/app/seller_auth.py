@@ -13,7 +13,7 @@ The agent checks the signature, the action, the seller, the age (5 minutes), tha
 not seen before, and then asks NEAR RPC (``view_access_key``) whether that public key is on the
 seller account. A full-access key always counts. A function-call key counts only when it is
 scoped to the TrustLock contract (``TRUSTLOCK_CONTRACT_ID``): that key is created by the seller's
-own wallet when they sign in to TrustLock, so holding it proves the same thing. Set
+own wallet when they sign in to Podlock, so holding it proves the same thing. Set
 ``TRUSTLOCK_AUTH_FULL_ACCESS_ONLY=1`` to accept full-access keys only.
 """
 
@@ -170,7 +170,7 @@ def verify(header: str | None, seller_id: str, action: str, now_ms: float | None
         fields = json.loads(message)
         signed_action, signed_seller, timestamp = fields["action"], fields["seller_id"], fields["timestamp"]
     except (ValueError, KeyError, TypeError):
-        raise _invalid("the signed message is not TrustLock JSON") from None
+        raise _invalid("the signed message is not Podlock JSON") from None
     if signed_action != action or signed_seller != seller_id:
         raise _invalid("it was signed for another action or seller")
     now_ms = time.time() * 1000 if now_ms is None else now_ms
@@ -183,7 +183,7 @@ def verify(header: str | None, seller_id: str, action: str, now_ms: float | None
     except chain.RpcError as exc:
         raise AuthError(502, "ERR_RPC", f"Could not check the key on NEAR: {exc}.") from exc
     if permission is None or not _key_counts(permission):
-        raise AuthError(403, "ERR_NOT_OWNER", "That key is not a TrustLock or full-access key of this account.")
+        raise AuthError(403, "ERR_NOT_OWNER", "That key is not a Podlock or full-access key of this account.")
     if not nonces.use(f"{public_key}:{nonce.hex()}", now_ms):
         raise AuthError(401, "ERR_AUTH_REPLAY", "This proof was already used; sign again.")
     return public_key

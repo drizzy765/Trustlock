@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "TrustLock",
-    short_name: "TrustLock",
+    name: "Podlock",
+    short_name: "Podlock",
     description: "Pay on delivery for African sellers across social media and any chat app.",
     start_url: "/",
     display: "standalone",

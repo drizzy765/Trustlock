@@ -1,12 +1,26 @@
 # AGENTS.md
 
-Instructions for the coding agent (opencode / Cursor running Kimi) helping the TrustLock team (Timi, Brayan Sorgho, Mikezx8) build TrustLock.
+Instructions for the coding agent (opencode / Cursor running Kimi) helping the Podlock team (Timi, Brayan Sorgho, Ajiboye Toluwalase) build Podlock (formerly TrustLock).
+
+## Build, test and run (verified 14 Nov 2026 from a fresh clone)
+
+| What | Command | Expected |
+|---|---|---|
+| Contract tests (Rust stable >= 1.88, `rustup target add wasm32-unknown-unknown`; no cargo-near needed) | `cd contract && cargo test` (Linux, if OpenSSL isn't found: `OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu OPENSSL_INCLUDE_DIR=/usr/include`) | 34 + 8 + 14 passed, 1 ignored (S15, slow) |
+| Agent tests (Python 3.11+) | `cd agent && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt && python -m pytest ../tests -q` | 288 passed |
+| Web build (Node 20+) | `cd web && npm ci && npm run build` | 16 static pages |
+| Run agent | `cp .env.example .env && cd agent && uvicorn app.main:app --port 8080` | `GET /health` returns `{"ok":true,...}` |
+| Run web | `cd web && echo NEXT_PUBLIC_AGENT_URL=http://localhost:8080 > .env.local && npm run dev` | http://localhost:3000 |
+
+Map of the code: see "Repository layout" and "Claims and where to check them" in the README.
+
+Do not rename these legacy identifiers (the project was TrustLock before it became Podlock): `TRUSTLOCK_*` env vars, `trustlock-v2-timi.testnet` and `trustlock-timi.testnet`, the browser storage keys `trustlock:*`, the wallet app key `"trustlock"`, the NEP-413 recipient `trustlock-agent`, the `X-TrustLock-Auth` header, the crate names and the deploy URLs.
 
 ## Person
 
 - **Timi** (Agoro Oluwatimilehin) — AI/ML engineer, Lagos. Deal agent, receipt check, demo, X post, submission. Never call him a student.
 
-The team is Timi (drizzy765), Brayan Sorgho (Sorghobrayan-dotcom) and Mikezx8. Do not add or remove teammates; owners are listed in the README.
+The team is Timi (drizzy765), Brayan Sorgho (Sorghobrayan-dotcom) and Ajiboye Toluwalase (metrosmash). Do not add or remove teammates; owners are listed in the README.
 
 ## Product decisions that are already made
 
@@ -120,6 +134,6 @@ Do not copy their code verbatim into this repo. Do not copy their credentials, a
 
 ## Out of scope
 
-- Shipping a production WhatsApp Business integration (Meta error 131031 still blocks Sell-Safe). TrustLock works through a shareable payment link in any chat app; the WhatsApp waitlist is fine to mention.
+- Shipping a production WhatsApp Business integration (Meta error 131031 still blocks Sell-Safe). Podlock works through a shareable payment link in any chat app; the WhatsApp waitlist is fine to mention.
 - Replacing the receipt engine with "ask Muse whether this looks paid."
 - A second token besides USDC on NEAR for v1 (Intents may *take* another asset; the escrow itself holds USDC).

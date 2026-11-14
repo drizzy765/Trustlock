@@ -49,9 +49,9 @@ export default function WhoItsFor() {
           >
             <p className="text-bone">Pay on delivery? Here&rsquo;s the link</p>
             <p className="mt-2 flex items-center gap-2 rounded-[6px] border border-line bg-ink-900 px-2 py-1.5 text-mute">
-              <LockMark state="funded" size={16} label="TrustLock link" />
+              <LockMark state="funded" size={16} label="Podlock link" />
               <span className="truncate font-mono text-[13px]" translate="no">
-                trustlock…/pay/12
+                podlock…/pay/12
               </span>
             </p>
           </motion.div>
@@ -64,7 +64,7 @@ export default function WhoItsFor() {
             Accra, and who lose sales when the buyer won&rsquo;t pay first.
           </p>
           <p className="mt-4 text-mute">
-            TrustLock doesn&rsquo;t connect to banks or mobile-money networks. It replaces &ldquo;pay first and hope&rdquo; with escrow: the buyer locks
+            Podlock doesn&rsquo;t connect to banks or mobile-money networks. It replaces &ldquo;pay first and hope&rdquo; with escrow: the buyer locks
             USDC, and it moves only when the order arrives or the deadline passes.
           </p>
         </div>

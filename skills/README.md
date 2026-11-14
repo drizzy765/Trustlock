@@ -1,4 +1,4 @@
-# Skills and references (TrustLock)
+# Skills and references (Podlock)
 
 Only links that returned HTTP 200 when checked on 5 November 2026 are listed. Dead hosts and 404s are at the bottom — do not resurrect them.
 

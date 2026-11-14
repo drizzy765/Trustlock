@@ -1,4 +1,4 @@
-# TrustLock Testnet Deployment Guide
+# Podlock Testnet Deployment Guide
 
 ## Status
 

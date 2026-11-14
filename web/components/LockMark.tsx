@@ -13,7 +13,7 @@ const KEYHOLE: Record<DealState, string> = {
 };
 
 /**
- * The TrustLock padlock (the logo's own paths). Keyhole colour and shackle show the deal state.
+ * The Podlock padlock (the logo's own paths). Keyhole colour and shackle show the deal state.
  * Created: outline only. Funded: bone body, amber keyhole. Released: shackle lifts 6px, green keyhole.
  */
 export default function LockMark({

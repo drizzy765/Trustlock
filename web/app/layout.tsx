@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-// avoid-ai-design-ignore: T2, T4 — Geist is the brand face: the TrustLock wordmark is outlined from Geist Medium.
+// avoid-ai-design-ignore: T2, T4 — Geist is the brand face: the Podlock wordmark is outlined from Geist Medium.
 import { Geist, Geist_Mono } from "next/font/google";
 import "@near-wallet-selector/modal-ui/styles.css";
 import "./globals.css";
@@ -19,18 +19,18 @@ const siteUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "TrustLock: pay on delivery", template: "%s · TrustLock" },
+  title: { default: "Podlock: pay on delivery", template: "%s · Podlock" },
   description: tagline,
-  applicationName: "TrustLock",
+  applicationName: "Podlock",
   openGraph: {
-    title: "TrustLock: pay on delivery",
+    title: "Podlock: pay on delivery",
     description: `${tagline} USDC escrow on NEAR. Released only on delivery proof.`,
-    siteName: "TrustLock",
+    siteName: "Podlock",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TrustLock: pay on delivery",
+    title: "Podlock: pay on delivery",
     description: tagline,
   },
 };

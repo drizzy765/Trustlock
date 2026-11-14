@@ -1,4 +1,4 @@
-# TrustLock end-to-end flow
+# Podlock end-to-end flow
 
 **Status:** this is the confirmed product flow (11 Nov 2026). It's the source of truth for the frontend ([design direction](design_direction.md)), the agent and contract work. Every step below is marked **Built**, **Partial** or **Planned**, checked against `main` at the time of writing. "Built" means the code exists. It does not mean it's deployed or tested end to end. Nothing is on mainnet.
 
@@ -7,7 +7,7 @@
 ## Scope
 
 - Global by design, built for **African businesses first**.
-- **Any business, any chat app.** A seller shares a TrustLock payment link anywhere: WhatsApp, Telegram, X, SMS, email, Instagram DMs, a website. TrustLock isn't tied to one platform.
+- **Any business, any chat app.** A seller shares a Podlock payment link anywhere: WhatsApp, Telegram, X, SMS, email, Instagram DMs, a website. Podlock isn't tied to one platform.
 - Settlement is **USDC in a NEAR escrow contract**. Testnet uses `usdc.fakes.testnet`.
 
 ## Actors
@@ -16,18 +16,18 @@
 |---|---|---|
 | **Seller** (any business) | Connects a wallet, adds business info, picks an agent, creates payment links and shares them in any chat | Take the buyer's money before proof of delivery |
 | **Buyer** | Clicks the link, reviews the deal, pays into escrow, confirms receipt with one tap | Get goods and claw the money back after confirming |
-| **Agent** (built-in TrustLock agent, or the seller's own model: Claude, ChatGPT, Gemini, others) | Reads the deal and contract state, checks order and delivery evidence, answers questions in the buyer's language, recommends release, prepares an *unsigned* transaction | **Move, release or refund funds.** It holds no key that can |
+| **Agent** (built-in Podlock agent, or the seller's own model: Claude, ChatGPT, Gemini, others) | Reads the deal and contract state, checks order and delivery evidence, answers questions in the buyer's language, recommends release, prepares an *unsigned* transaction | **Move, release or refund funds.** It holds no key that can |
 | **Rider** (optional) | Scans the buyer's one-time QR at handover | Release funds without the buyer's QR, reuse a QR, or call anything except `confirm_delivery` (function-call key) |
 | **Escrow contract** (NEAR, Rust) | Holds USDC and releases or refunds only on hard proof or the deadline | Be talked into anything. It only checks signatures, hashes and time |
-| **TrustLock operator** (owner account) | Resolves disputes by hand in v1 | Release funds outside the dispute path (planned constraint) |
+| **Podlock operator** (owner account) | Resolves disputes by hand in v1 | Release funds outside the dispute path (planned constraint) |
 
 ## Step-by-step
 
 ### Seller setup (once)
-1. Opens the TrustLock site and goes to `/onboard`. **Planned** (pages are placeholders; see #8 and the onboarding issue).
+1. Opens the Podlock site and goes to `/onboard`. **Planned** (pages are placeholders; see #8 and the onboarding issue).
 2. Connects a NEAR wallet. **Partial**: `web/lib/wallet.ts` is a stub that throws.
 3. Adds business info (name, handle, country, what they sell). **Planned**: no seller profile storage yet.
-4. Chooses the **built-in TrustLock agent** or **brings their own model** via API key or MCP. **Partial**: the built-in agent is a deterministic English/Pidgin/Yoruba stub (`agent/app/deal_agent.py`). Bring-your-own-model is **Planned**.
+4. Chooses the **built-in Podlock agent** or **brings their own model** via API key or MCP. **Partial**: the built-in agent is a deterministic English/Pidgin/Yoruba stub (`agent/app/deal_agent.py`). Bring-your-own-model is **Planned**.
 5. Sets defaults: delivery deadline, and whether a rider scan is used. **Planned**.
 
 ### Each sale
@@ -108,7 +108,7 @@ stateDiagram-v2
 | Area | Built | Planned / gap |
 |---|---|---|
 | Contract: create and fund | `create_deal`, `ft_on_transfer` (token and exact-amount checks) | Make `buyer` optional and bind the payer at funding; only the seller can create their own deals; the buyer supplies the QR hash at funding so the seller never knows the preimage |
-| Contract: release | `confirm_delivery` (rider-only, QR hash, replay protection, deadline) + `on_payout` | **`confirm_receipt(deal_id)`, a buyer one-tap release** (new issue, Mikezx8 reviews) |
+| Contract: release | `confirm_delivery` (rider-only, QR hash, replay protection, deadline) + `on_payout` | **`confirm_receipt(deal_id)`, a buyer one-tap release** (new issue) |
 | Contract: refund | `claim_timeout_refund_for` + `on_refund` | Retry path: if the refund transfer fails, the deal stays `Expired`, but the claim requires `Funded`, so it can't be retried |
 | Contract: disputes | `open_dispute` → Disputed | `resolve_dispute` (owner or multisig, manual v1). Without it, disputed funds are stuck |
 | Contract: tests and deploy | Unit tests for status strings | near-workspaces integration tests (#5, #6); testnet deploy (#10) |

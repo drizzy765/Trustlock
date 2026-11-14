@@ -36,7 +36,7 @@ phase in risk order; each may be dropped without harming the submission.
   save output. Acceptance: dry quote logged, labelled `dry`, never called a payment.
 - [ ] **#14 (stretch, agent-only): multi-currency quotes.** Extends #9, no contract
   risk. Acceptance: dry quote for a second asset, signature verified, labelled dry.
-- [ ] **#18 (stretch, contract change): `resolve_dispute`.** Needs Mikezx8 review,
+- [ ] **#18 (stretch, contract change): `resolve_dispute`.** Needs a teammate review,
   green CI, testnet redeploy + re-verification. Highest blast radius — attempt only
   with review bandwidth, drop freely.
 - [ ] **#11 (stretch): tiny mainnet USDC via 1Click (<$1).** Needs a funded mainnet
@@ -88,7 +88,7 @@ phase in risk order; each may be dropped without harming the submission.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| #18 redeploy breaks frozen E2E | High | Build-phase last; needs Mikezx8 review; drop freely |
+| #18 redeploy breaks frozen E2E | High | Build-phase last; needs a teammate review; drop freely |
 | #11 no funded mainnet account | Med | Drop-dead before Phase 3; testnet-only is eligible |
 | Slow laptop rebuilds | Med | Small crate graph; no new WASM deps |
 | README over-claims | High | Phase 2 verified against real tx links before submit |

@@ -17,8 +17,8 @@ export default function SiteFooter() {
   return (
     <footer className="mt-24 border-t border-line">
       <div className="mx-auto max-w-[1200px] px-5 py-12 md:px-8">
-        <Link href="/" aria-label="TrustLock home" className="inline-flex rounded-[6px]">
-          <Image src="/brand/trustlock-logo-dark.svg" alt="TrustLock" width={90} height={24} className="h-6 w-auto" />
+        <Link href="/" aria-label="Podlock home" className="inline-flex rounded-[6px]">
+          <Image src="/brand/trustlock-logo-dark.svg" alt="Podlock" width={78} height={24} className="h-6 w-auto" />
         </Link>
         <p className="mt-4 max-w-[560px] text-mute">Pay on delivery for African sellers across social media and any chat app.</p>
         <div className="mt-6 flex flex-wrap items-center gap-2 text-sm text-faint">

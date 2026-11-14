@@ -18,7 +18,7 @@ const CHIP: Record<Chip, { label: string; className: string }> = {
 
 /** Our own copy per provider id. Status always comes from the API, never from here. */
 const COPY: Record<string, { name?: string; by: string; line: string }> = {
-  builtin: { name: "TrustLock agent", by: "Built by TrustLock", line: "Drafts deals from a chat message and checks them. No key needed." },
+  builtin: { name: "Podlock agent", by: "Built by Podlock", line: "Drafts deals from a chat message and checks them. No key needed." },
   anthropic: { name: "Claude", by: "Model by Anthropic", line: "Bring your own Claude key on the seller agent page. Being tested end to end." },
   groq: { name: "Groq", by: "Models by Groq", line: "Free Llama models with your own Groq key." },
   openai: { name: "OpenAI", by: "Models by OpenAI", line: "Draft deals with your own OpenAI key." },
@@ -45,7 +45,7 @@ function toTile(p: AgentProvider): Tile {
 }
 
 function Logo({ id }: { id: string }) {
-  if (id === "builtin") return <LockMark state="created" size={24} label="TrustLock" />;
+  if (id === "builtin") return <LockMark state="created" size={24} label="Podlock" />;
   const icon = PROVIDER_ICON_PATHS[id];
   if (!icon)
     return (
@@ -126,7 +126,7 @@ export default function AgentsSection({ providers, live }: { providers: AgentPro
                 <Terminal aria-hidden="true" strokeWidth={1.5} className="size-6 text-bone" />
                 <span className="inline-flex h-6 items-center rounded-[6px] border border-bone px-2 text-[13px] text-bone">Open API</span>
               </div>
-              <p className="mt-4 font-medium">Any agent that can call an HTTP API can use TrustLock.</p>
+              <p className="mt-4 font-medium">Any agent that can call an HTTP API can use Podlock.</p>
               <p className="mt-1 text-[15px] text-mute">Read the spec, then try a dry-run preview. It only reads a message and drafts nothing.</p>
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[15px]">
                 <a
@@ -154,7 +154,7 @@ export default function AgentsSection({ providers, live }: { providers: AgentPro
         </div>
 
         <p className="mt-6 text-[13px] text-faint">
-          Product names and logos belong to their owners. Listing a provider doesn&rsquo;t mean it endorses TrustLock. Logos from Simple Icons (CC0).
+          Product names and logos belong to their owners. Listing a provider doesn&rsquo;t mean it endorses Podlock. Logos from Simple Icons (CC0).
         </p>
       </div>
     </section>

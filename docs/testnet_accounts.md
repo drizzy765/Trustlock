@@ -1,4 +1,4 @@
-# Testnet Accounts — TrustLock
+# Testnet Accounts — Podlock
 
 ## Deployed Contract (v2 — current)
 

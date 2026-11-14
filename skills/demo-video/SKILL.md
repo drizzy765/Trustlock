@@ -1,4 +1,4 @@
-# Skill: TrustLock demo video
+# Skill: Podlock demo video
 
 ## When to use
 
