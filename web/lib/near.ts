@@ -92,13 +92,16 @@ export async function createDeal(
   deadlineMs: number,
   qrHashHex: string
 ) {
-  return sendFunctionCall({
+  const outcome = await sendFunctionCall({
     receiverId: contractId,
     methodName: "create_deal",
     args: { seller, rider, buyer, item, price, deadline_ms: deadlineMs, qr_hash_hex: qrHashHex },
     gas: CREATE_GAS,
     deposit: NO_DEPOSIT,
   });
+  // The contract returns the new deal id (u64) as the SuccessValue, e.g. "MQ==" for 1.
+  const id = providers.getTransactionLastResult(outcome);
+  return Number(id);
 }
 
 export async function confirmDelivery(dealId: number, qrPreimageHex: string) {
