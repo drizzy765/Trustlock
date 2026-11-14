@@ -22,7 +22,7 @@ The intended flow is that a buyer locks USDC in a NEAR escrow, a seller confirms
 
 This is not another "LLM looks at the work and releases escrow" project. [ClearSend](https://github.com/dukemawex/clearsend-near) already does that on testnet, from a single model's opinion. TrustLock releases on a **physical delivery event** an AI cannot be talked into approving.
 
-Sibling project (different hackathon): `micro1-receipt-eval`. NEAR HACKATHON.md Q-015: if one person submits two NEAR projects, each README must name the other. This README names none besides TrustLock unless that changes.
+Sibling project (different hackathon): `micro1-receipt-eval`. Other NEAR HACKATHON project of a team member (rule Q-015, each README names the other): Brayan Sorgho also submits a second, independent and solo project, [near-posterior](https://github.com/Sorghobrayan-dotcom/near-posterior) (Investment Thesis track). The two projects share no code, data or result.
 
 ## Product target (not a list of completed features)
 
