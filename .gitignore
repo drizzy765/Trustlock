@@ -42,3 +42,9 @@ raw-recordings/
 
 # agent junk
 .cursor/
+
+# sqlite deal drafts (local + Railway volume; never commit the live db)
+trustlock.db
+trustlock.db-journal
+trustlock.db-wal
+trustlock.db-shm
