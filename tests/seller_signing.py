@@ -3,11 +3,20 @@
 import base64
 import json
 import os
+import time
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from app import seller_auth
+
+ACTIONS = {
+    ("PUT", "agent"): "set_provider",
+    ("PUT", "key"): "set_key",
+    ("DELETE", "key"): "delete_key",
+    ("POST", "test"): "test",
+    ("POST", "ask"): "ask",
+}
 
 
 class Signer:
@@ -16,31 +25,30 @@ class Signer:
         raw = self.private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
         self.public_key = "ed25519:" + seller_auth.b58encode(raw)
 
-    def header(self, seller_id, action=None, *, nonce=None, recipient=None, message=None,
-               public_key=None, account_id=None):
-        """A header for the signMessage envelope. `action` is accepted and ignored."""
+    def header(self, seller_id, action, *, timestamp=None, nonce=None, recipient=None, message=None):
+        """A header for the signMessage envelope: JSON {action, seller_id, timestamp}. Timestamp is ms."""
         nonce = nonce if nonce is not None else os.urandom(32)
-        account = seller_id if account_id is None else account_id
         if message is None:
-            message = seller_auth.canonical_message(account)
+            ts = int(time.time() * 1000) if timestamp is None else timestamp
+            message = json.dumps({"action": action, "seller_id": seller_id, "timestamp": ts})
         digest = seller_auth.nep413_hash(message, nonce, recipient or seller_auth.recipient())
         proof = {
-            "account_id": account,
+            "account_id": seller_id,
             "message": message,
             "nonce": base64.b64encode(nonce).decode(),
             "recipient": recipient or seller_auth.recipient(),
-            "public_key": public_key or self.public_key,
+            "public_key": self.public_key,
             "signature": base64.b64encode(self.private.sign(digest)).decode(),
         }
         return {seller_auth.HEADER: base64.b64encode(json.dumps(proof).encode()).decode()}
 
 
 def action_for(method, path):
-    """The seller for a /sellers/{id}/agent... write, or None for reads."""
+    """The signed action for a /sellers/{id}/agent... request, or None for reads."""
     parts = path.strip("/").split("/")
     if len(parts) < 3 or parts[0] != "sellers" or method.upper() == "GET":
         return None
-    return parts[1], parts[-1]
+    return parts[1], ACTIONS.get((method.upper(), parts[-1]))
 
 
 def install(monkeypatch, signer, owners, permission="FullAccess"):
