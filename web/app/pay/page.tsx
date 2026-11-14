@@ -58,7 +58,7 @@ function PayRedirect() {
           onChange={(e) => setEntry(e.target.value)}
           placeholder="https://…/pay/12"
         />
-        <Hint>The link looks like …/pay/12. Your seller makes one on TrustLock.</Hint>
+        <Hint>The link looks like …/pay/12. Your seller makes one on Podlock.</Hint>
         <Button type="submit" size="lg" className="mt-5" disabled={!entry.trim()}>
           Open deal
         </Button>

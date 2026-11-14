@@ -872,7 +872,7 @@ export default function PayDealPage() {
 
       <p className="mt-10 text-[15px] text-mute">
         Used to paying by bank transfer, M-Pesa or MoMo? Here you lock USDC instead, and it&rsquo;s released only when your order arrives.
-        TrustLock doesn&rsquo;t connect to banks or mobile-money networks.
+        Podlock doesn&rsquo;t connect to banks or mobile-money networks.
       </p>
 
       {/* Confirm dialog: releasing funds cannot be undone. Same handler as before. */}

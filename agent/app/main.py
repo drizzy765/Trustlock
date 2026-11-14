@@ -30,9 +30,9 @@ def _public_url() -> str:
 
 
 app = FastAPI(
-    title="TrustLock deal agent",
+    title="Podlock deal agent",
     version="0.1.0",
-    servers=[{"url": _public_url(), "description": "TrustLock agent"}],
+    servers=[{"url": _public_url(), "description": "Podlock agent"}],
 )
 
 

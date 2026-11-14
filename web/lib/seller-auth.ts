@@ -5,7 +5,7 @@ import { network } from "./config";
  * Proof that this browser controls the seller's NEAR account, for the agent's seller writes.
  *
  * Signs a NEP-413 message ({action, seller_id, timestamp} JSON, a random 32-byte nonce, and the
- * recipient "trustlock-agent") with the access key the wallet created for TrustLock at sign-in.
+ * recipient "trustlock-agent") with the access key the wallet created for Podlock (formerly TrustLock) at sign-in.
  * The agent checks the signature, the age (5 minutes), the nonce (single use) and, over NEAR RPC,
  * that the key belongs to the seller account. The private key never leaves the browser.
  */
@@ -44,7 +44,7 @@ function base64(bytes: Uint8Array): string {
 
 export async function sellerAuthHeader(sellerId: string, action: SellerAction): Promise<Record<string, string>> {
   const keyPair = await new keyStores.BrowserLocalStorageKeyStore().getKey(network, sellerId);
-  if (!keyPair) throw new Error("Reconnect your wallet so TrustLock can confirm you own this account.");
+  if (!keyPair) throw new Error("Reconnect your wallet so Podlock can confirm you own this account.");
   const message = JSON.stringify({ action, seller_id: sellerId, timestamp: Date.now() });
   const nonce = crypto.getRandomValues(new Uint8Array(32));
   // NEP-413: sha256(borsh(u32 tag) ++ borsh({message, nonce, recipient, callbackUrl: None}))

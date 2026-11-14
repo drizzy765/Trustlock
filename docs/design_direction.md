@@ -1,7 +1,7 @@
-# TrustLock design direction
+# Podlock design direction
 
 **Status:** proposal for the `web/` frontend (issue [#8](https://github.com/drizzy765/Trustlock/issues/8)). Docs only. Nothing here changes app code.
-**Goal:** TrustLock should look and feel like a funded fintech startup, and it must stay honest about what is built.
+**Goal:** Podlock should look and feel like a funded fintech startup, and it must stay honest about what is built.
 **Product flow:** this doc follows the confirmed flow in [`docs/end_to_end_flow.md`](end_to_end_flow.md). If the two disagree, the flow doc wins.
 **Tagline:** *AI does the work. Cryptography holds the money.*
 
@@ -14,7 +14,7 @@
 ## 1. Brief
 
 ```text
-Designing: the TrustLock website and app (/, /onboard, /agents, /pay/[dealId], /scan, /dashboard), web, mobile first.
+Designing: the Podlock website and app (/, /onboard, /agents, /pay/[dealId], /scan, /dashboard), web, mobile first.
 Who: businesses selling remotely, African businesses first, global by design. Sellers share a payment link in ANY chat app (WhatsApp, Telegram, X, SMS, email, Instagram DMs...). Buyers click it with zero setup. Dispatch riders use low-end Android phones. Hackathon judges use laptops.
 Goal: seller creates a payment link → buyer pays into NEAR USDC escrow → money releases only on hard proof (buyer one-tap "I received it", or the rider scans the one-time QR). Deadline passes → buyer refunded. Disputes are handled manually in v1.
 Tone: calm, expensive, certain. A vault, not a casino.
@@ -39,7 +39,7 @@ Secondary checks: [stripe.com](https://stripe.com) (WebGL gradient hero, a stats
 
 ## 3. The direction: "Glass Vault"
 
-**One dominant direction.** We take PayBox's cinematic dark vault language and give it a corporate, institutional frame: TrustLock should look like infrastructure that serious African businesses run on, from Lagos, Accra and Nairobi to Johannesburg. Each page is a near-black canvas with **real, licensed photographs** of professional African businesspeople in modern offices, boardrooms and logistics operations, given one consistent dark grade (§5.6). There are no market stalls, street scenes or doorsteps. Over the photo floats a single frosted-glass **lock block**, the escrow, rendered as a translucent cube with a soft amber core while funds are locked. When delivery is proven (the buyer taps "I received it" or the rider scans), the block clears, the amber turns to green, and a mono receipt line prints the transaction hash. Type is big, plain and confident (Geist). Every on-chain fact (account IDs, amounts, hashes) is set in Geist Mono, so "this is real data" has its own visual voice.
+**One dominant direction.** We take PayBox's cinematic dark vault language and give it a corporate, institutional frame: Podlock should look like infrastructure that serious African businesses run on, from Lagos, Accra and Nairobi to Johannesburg. Each page is a near-black canvas with **real, licensed photographs** of professional African businesspeople in modern offices, boardrooms and logistics operations, given one consistent dark grade (§5.6). There are no market stalls, street scenes or doorsteps. Over the photo floats a single frosted-glass **lock block**, the escrow, rendered as a translucent cube with a soft amber core while funds are locked. When delivery is proven (the buyer taps "I received it" or the rider scans), the block clears, the amber turns to green, and a mono receipt line prints the transaction hash. Type is big, plain and confident (Geist). Every on-chain fact (account IDs, amounts, hashes) is set in Geist Mono, so "this is real data" has its own visual voice.
 
 Signature traits to keep, never water down:
 0. **The tagline is the system.** "AI does the work. Cryptography holds the money." The agent gets soft UI (chat bubbles, drafts); money gets hard UI (glass block, mono, chain links).
@@ -137,7 +137,7 @@ Use `text-wrap: balance` on headings and `text-wrap: pretty` on paragraphs. No i
 - Load 3D only when `matchMedia('(min-width: 1024px) and (prefers-reduced-motion: no-preference)')` matches and `navigator.hardwareConcurrency >= 4`, through `next/dynamic` with `ssr:false`.
 - Hero photos go through `next/image` as AVIF/WebP, 1600px max, with `priority` set only on the LCP image.
 
-### 5.3 TrustLock hero visual: the lock block
+### 5.3 Podlock hero visual: the lock block
 
 - **Concept:** a frosted-glass cube with **three states**, tied to the deal lifecycle and to the real contract states.
   1. *Created:* a hollow glass outline.
@@ -170,14 +170,14 @@ const lowEnd =
 
 ### 5.6 Photography and art direction (real photos only)
 
-**Subject:** TrustLock is infrastructure for serious businesses, so the people in our photos look like professionals at work. Think African businesspeople in modern offices and boardrooms, operations and logistics teams in warehouses, professional couriers in uniform, and people closing deals on laptops and phones. The feeling should be corporate, competent and calm.
+**Subject:** Podlock is infrastructure for serious businesses, so the people in our photos look like professionals at work. Think African businesspeople in modern offices and boardrooms, operations and logistics teams in warehouses, professional couriers in uniform, and people closing deals on laptops and phones. The feeling should be corporate, competent and calm.
 
 **Hard rules**
 - **Real photographs only.** **No AI-generated images of people, ever**, including "AI-enhanced" faces or generated backgrounds containing people. AI tools may only be used for non-human assets we build ourselves (the 3D lock block).
 - **No local-market, street-stall, doorstep or roadside scenes**, and no poverty or "aid" imagery. Delivery is shown through professional logistics (warehouses, dispatch teams, couriers in uniform), never a doorstep handover.
 - **Licensed only:** the [Unsplash License](https://unsplash.com/license) (free, no attribution required, but we credit anyway), the [Pexels License](https://www.pexels.com/license/), or properly purchased stock. **Unsplash+ photos are paid and need an Unsplash+ licence.** Many of the best "African business" results on Unsplash are Unsplash+ (Getty Images), so check the badge before using one.
 - **Credit every photographer** in `web/public/photos/CREDITS.md` (photo URL, photographer, licence, date checked), plus a short "Photos: Unsplash / name" line in the footer.
-- Never present a stock model as a TrustLock customer, seller or rider. Captions describe the scene ("Operations team, warehouse"). No names, no quotes, no customer stories.
+- Never present a stock model as a Podlock customer, seller or rider. Captions describe the scene ("Operations team, warehouse"). No names, no quotes, no customer stories.
 - Don't add photos to the repo until the licence is confirmed. Links are enough for now.
 
 **Treatment** (so mixed stock looks like one shoot):
@@ -218,7 +218,7 @@ Gap: free, verified photos of uniformed African **courier and dispatch** teams w
 
 ### 6.1 Patterns other startups use
 
-| Pattern | Live example | Can TrustLock use it now? |
+| Pattern | Live example | Can Podlock use it now? |
 |---|---|---|
 | Customer or partner logo row | [privy.io](https://www.privy.io) (Stripe, Robinhood, Kraken…) | **No.** We have no customers or partners. |
 | "Audited by" / security logos | [paybox.sh](https://paybox.sh) | **No.** Not audited. |
@@ -282,7 +282,7 @@ Rhythm modelled on PayBox's alternating cinematic and dense sections, not the ge
 ### 8.3 `/pay/[dealId]`: buyer pays (opened from a link in any chat)
 **Zero setup is the goal.** The buyer sees the deal before anything else: no sign-up, no app. Today the buyer still needs a NEAR wallet holding test USDC (testnet). Planned: embedded or passkey wallet creation in one tap, so a first-time buyer never sees the word "wallet" before paying. Until that ships, the page shows a short "New to NEAR? Get a testnet wallet in 1 minute" helper.
 
-**Link previews:** the link must unfurl nicely in WhatsApp, Telegram, X, iMessage and Slack. Use Open Graph and Twitter card tags with a generated OG image (`next/og`) showing the business name, item, amount and "Protected by TrustLock escrow".
+**Link previews:** the link must unfurl nicely in WhatsApp, Telegram, X, iMessage and Slack. Use Open Graph and Twitter card tags with a generated OG image (`next/og`) showing the business name, item, amount and "Protected by Podlock escrow".
 
 **Layout:** a single 640px column. A deal summary card on top, the wallet and pay action below, a sticky bottom CTA on mobile.
 - **Deal card (glass over ink):** seller name and store handle, item, amount in **mono tabular**, both `12.00 USDC` and an approximate local currency in the buyer's currency (`≈ ₦19,800`, `≈ GH₵…`, `≈ KSh…` · rate at quote time, only with a real quote, otherwise hidden). Delivery deadline as a countdown, and a "Protected by escrow" line with a lock icon.
@@ -296,7 +296,7 @@ Rhythm modelled on PayBox's alternating cinematic and dense sections, not the ge
   - *Insufficient balance:* show the balance in mono, plus a link to the testnet faucet in TESTNET mode.
   - *Success (Funded):* the lock block turns amber, with "Locked. 12.00 USDC is safe in escrow until delivery." Two ways to release, shown as equal cards. (1) **"I received it"**: a big one-tap button (planned contract method `confirm_receipt`, signed by the buyer's wallet; shows a confirm sheet, "This pays the seller 12.00 USDC. This can't be undone."). (2) **Your one-time code**: a full-width QR to show the rider, with Save image. Bookmark prompt: "Keep this page; it's your receipt." A mono tx hash with copy and explorer link.
   - *Released:* green, "Delivered. The seller has been paid." with the tx link.
-  - *Disputed:* red-outlined, "Under review by the TrustLock team. Funds stay locked until it's resolved." Disputes are manual in v1, so no automated outcome is promised.
+  - *Disputed:* red-outlined, "Under review by the Podlock team. Funds stay locked until it's resolved." Disputes are manual in v1, so no automated outcome is promised.
   - *Expired:* blue status, "Deadline passed. Your refund is available," with a Claim refund button.
 - **Mode badge** at the top of the card. In DEMO, the button reads `Simulate lock`.
 
@@ -329,7 +329,7 @@ Riders are optional: some sellers deliver themselves, and the buyer's one-tap co
 - **States:**
   - *Empty:* a lock-block outline illustration, "No deals yet. Share your payment link to get your first order." with the link card inline.
   - *Loading:* skeleton rows.
-  - *Error:* "Couldn't reach the TrustLock agent. Your money is safe on chain; this only affects the view." with Retry. Indexer or API failures must never look like lost funds.
+  - *Error:* "Couldn't reach the Podlock agent. Your money is safe on chain; this only affects the view." with Retry. Indexer or API failures must never look like lost funds.
 
 ## 9. Self-serve seller onboarding (`/onboard`)
 
@@ -343,7 +343,7 @@ Riders are optional: some sellers deliver themselves, and the buyer's one-tap co
 | 1 | **Connect wallet** | Connect a NEAR wallet (testnet), or "I don't have one" with a link to the testnet wallet and guide (`docs/testnet_accounts.md`) | connecting · connected (mono account ID with a ✓) · rejected · wrong network ("Switch to testnet") |
 | 2 | **Business info** | Business name, handle (becomes `trustlock.app/s/<handle>`, live availability check), country (any; African countries listed first), what you sell, an optional logo, optional contact links (any chat app, website, email) | handle taken · invalid · saved |
 | 3 | **Delivery defaults** | Default deadline (24h / 48h / 72h / custom), delivery areas, and **release proof**: "Buyer confirms" (always on) plus optional "Rider scans QR" (add a rider account ID, generate a rider key later via #7) | validation errors inline |
-| 4 | **Your agent** | Pick the **built-in TrustLock agent** or **Bring your own model** (Claude, ChatGPT, Gemini, others; §10). Choose languages (today: English, Pidgin, Yoruba stub; planned: many African languages via Intron Sahara). Can skip | key test ok · key invalid · skipped |
+| 4 | **Your agent** | Pick the **built-in Podlock agent** or **Bring your own model** (Claude, ChatGPT, Gemini, others; §10). Choose languages (today: English, Pidgin, Yoruba stub; planned: many African languages via Intron Sahara). Can skip | key test ok · key invalid · skipped |
 | 5 | **Your first payment link** | Item, amount, deadline → big QR + link, `Copy link`, native share (any chat app), `Download QR (PNG)`, and a preview of what buyers see (`/pay` mock, including the link-preview card) | generating · ready · error retry |
 | 6 | **Done** | Go to dashboard, plus a checklist (Make a test deal, Add a rider) | — |
 
@@ -355,7 +355,7 @@ What this needs underneath (for the team, not just design): seller profile stora
 **The safety statement** (verbatim, near the top of the page, and as the landing section's subhead):
 > **AI does the work. Cryptography holds the money.** Your agent reads the deal, checks order and delivery evidence, answers your buyers' questions in their language, recommends when to release, and prepares the transaction for a person to sign. **It can never release, move or refund funds.** Money moves only on hard proof: your buyer taps "I received it", or your rider scans the buyer's one-time code. If the deadline passes, the buyer is refunded. That rule lives in the smart contract, not in a prompt.
 
-**Two choices, equal weight:** (1) **Built-in TrustLock agent**, zero config, the default. (2) **Bring your own model**, for sellers who already pay for Claude, ChatGPT, Gemini or another model and want their own assistant's voice.
+**Two choices, equal weight:** (1) **Built-in Podlock agent**, zero config, the default. (2) **Bring your own model**, for sellers who already pay for Claude, ChatGPT, Gemini or another model and want their own assistant's voice.
 
 **Layout:** hero line + statement → a "What your agent can do" vs "What it can never do" two-column card (ticks vs locks) → provider grid → connection methods → security notes.
 
@@ -373,7 +373,7 @@ What this needs underneath (for the team, not just design): seller profile stora
 
 **Connection methods (design for both, build one):**
 1. **API key:** the seller pastes a key in Settings → AI agent. The field is masked, has a "Test connection" button, and shows the last 4 characters after saving. Options: (a) **client-side only**, kept in memory or IndexedDB with a "this device only" label, or (b) **server-side, encrypted at rest** (envelope encryption with a KMS or libsodium sealed box, a per-seller key, decrypted only inside the agent call). **Never in the repo, never in logs, never in `NEXT_PUBLIC_*`.**
-2. **MCP:** TrustLock exposes a read-and-prepare MCP server (`draft_deal`, `explain_deal`, `check_order_evidence`, `check_receipt`, `get_deal_status`, `recommend_release`, `prepare_confirm_tx`). `prepare_confirm_tx` returns an **unsigned** transaction that only the buyer's wallet can sign. There is deliberately **no** `release_funds` tool, and the agent never holds a key that can move funds. Sellers add its URL to Claude, ChatGPT or Grok connectors. Same safety statement on the page.
+2. **MCP:** Podlock exposes a read-and-prepare MCP server (`draft_deal`, `explain_deal`, `check_order_evidence`, `check_receipt`, `get_deal_status`, `recommend_release`, `prepare_confirm_tx`). `prepare_confirm_tx` returns an **unsigned** transaction that only the buyer's wallet can sign. There is deliberately **no** `release_funds` tool, and the agent never holds a key that can move funds. Sellers add its URL to Claude, ChatGPT or Grok connectors. Same safety statement on the page.
 
 **Languages:** today the deal agent is a deterministic English, Pidgin and Yoruba stub (`agent/app/deal_agent.py`). Planned: African-language speech-to-text and text-to-speech via [Intron Sahara](https://docs.voice.intron.io/docs/stt/supported-languages) (its list includes Hausa, Igbo, Yoruba, Pidgin, Swahili, Amharic, Zulu, Wolof, Twi and more), so buyers can send voice notes. Label it **Planned** until it's wired with a real key.
 
@@ -436,7 +436,7 @@ The current stack: Next.js 15 + React 19, **no Tailwind, no shadcn**, inline sty
 
 **The mark:** a rounded-square padlock body. Its shackle is one thick stroke that rises from the left post, arcs over, and finishes on the right as a checkmark tick instead of closing. The open shackle turning into a check reads as "verified, then released", which is exactly what the contract does. A single amber `#F2B544` keyhole dot sits centred in the body. That dot is the only colour in the logo, and it reuses the locked-funds amber from §4.1.
 
-**Wordmark:** "TrustLock" in Geist Medium (weight 500, tracking -0.025em), to the right of the mark, in the same colour as the mark.
+**Wordmark:** "Podlock" in Geist Medium (weight 500, tracking -0.025em), to the right of the mark, in the same colour as the mark.
 
 **Rules**
 - Clear space is at least the keyhole dot's diameter × 2 on every side.
@@ -476,7 +476,7 @@ This replaces "Glass Vault" so the doc and the code agree. It came out of a revi
 | Motion | `motion/react` with `MotionConfig reducedMotion="user"`. Hero entrance once; 150 ms page fade; status step 240 ms with a pulse that plays twice; lock 600 ms; release shackle lift, 0.5 s hold, then the text, and the final frame holds; the scan sweep is the only loop and runs only while the camera is on. Ease-out only, no bounce. |
 | Signature | **LockMark**: the logo's padlock as an inline SVG. Created is an outline, funded has an amber keyhole, released lifts the shackle 6px with a green keyhole, refunded has a blue keyhole. |
 | Shared components | SiteNav, SiteFooter, StatusBadge, ChainValue, AmountDisplay, DealTimeline, LockMark, QrCard, ScannerFrame, ReleaseMoment, Button (`web/components/`). |
-| Imagery | Six real Pexels photos (credits in `web/public/photos/CREDITS.md` and the footer). No captions presenting models as TrustLock users. No text on photos. |
+| Imagery | Six real Pexels photos (credits in `web/public/photos/CREDITS.md` and the footer). No captions presenting models as Podlock users. No text on photos. |
 | Pricing | Escrow is USDC only. Sellers may type a price in NGN, KES, GHS, ZAR, EGP or XOF; `web/lib/fx.ts` converts it to USDC in the browser (open.er-api.com, falling back to the fawazahmed0 currency API), and the USDC amount is what the draft stores and the buyer locks. |
 | Checks | `node detect.mjs web/app web/components` (avoid-ai-design) exits clean. Allowed ignores: `T2, T4` in `layout.tsx` (Geist is the wordmark face) and `SD4m` in ChainValue and AmountDisplay (mono for chain data). |
 

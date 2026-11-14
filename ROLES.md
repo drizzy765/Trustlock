@@ -1,4 +1,4 @@
-# TrustLock roles
+# Podlock roles
 
 Team for the NEAR Hackathon (deadline: 14 November 2026, 23:59 UTC). Issues live under the [NEAR Hackathon submit (Nov 14)](https://github.com/drizzy765/Trustlock/milestone/1) milestone.
 

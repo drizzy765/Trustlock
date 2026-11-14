@@ -2,11 +2,13 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="web/public/brand/trustlock-logo-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="web/public/brand/trustlock-logo-light.svg">
-    <img alt="TrustLock" src="web/public/brand/trustlock-logo-light.svg" width="360">
+    <img alt="Podlock" src="web/public/brand/trustlock-logo-light.svg" width="360">
   </picture>
 </p>
 
-# TrustLock
+# Podlock
+
+Podlock (formerly TrustLock): it was called TrustLock during development, so env vars (`TRUSTLOCK_*`), the contract accounts (`trustlock-v2-timi.testnet`, `trustlock-timi.testnet`), file names and the deploy URLs keep that name.
 
 Pay on delivery for African sellers across social media and any chat app. **AI does the work, cryptography holds the money:** funds release only on proof of delivery (the buyer's confirmation or the dispatch rider's one-time QR scan).
 
@@ -20,7 +22,7 @@ The intended flow is that a buyer locks USDC in a NEAR escrow, a seller confirms
 
 **Implementation status:** this repository is an early prototype, not yet a complete end-to-end or mainnet-ready product. The contract has core escrow methods, while the web pages, wallet wiring, Intents integration, and NEAR sandbox tests are incomplete. Buyer authorization for the QR and refund/dispute callback edge cases still need implementation and tests. Do not treat the product goals below as completed capabilities; see [the implementation plan](docs/implementation_plan.md) and [the architecture gaps](docs/architecture.md).
 
-This is not another "LLM looks at the work and releases escrow" project. [ClearSend](https://github.com/dukemawex/clearsend-near) already does that on testnet, from a single model's opinion. TrustLock releases on a **physical delivery event** an AI cannot be talked into approving.
+This is not another "LLM looks at the work and releases escrow" project. [ClearSend](https://github.com/dukemawex/clearsend-near) already does that on testnet, from a single model's opinion. Podlock releases on a **physical delivery event** an AI cannot be talked into approving.
 
 Sibling project (different hackathon): `micro1-receipt-eval`. Other NEAR HACKATHON project of a team member (rule Q-015, each README names the other): Brayan Sorgho also submits a second, independent and solo project, [near-posterior](https://github.com/Sorghobrayan-dotcom/near-posterior) (Investment Thesis track). The two projects share no code, data or result.
 
@@ -28,7 +30,7 @@ Sibling project (different hackathon): `micro1-receipt-eval`. Other NEAR HACKATH
 
 The confirmed end-to-end product flow (actors, sequence, state machine, built vs planned, security boundary) is in [docs/end_to_end_flow.md](docs/end_to_end_flow.md).
 
-| | ClearSend | TrustLock design target |
+| | ClearSend | Podlock design target |
 | --- | --- | --- |
 | Release trigger | LLM `attest` on free text | Rider scans a one-time buyer-signed QR |
 | Payment check | none visible | Deterministic receipt check for naira funding context (e.g. Lagos bank transfer; Nairobi M-Pesa and Accra MoMo are context only, not live rails); not a bank or telecom verification integration |
@@ -38,7 +40,7 @@ The confirmed end-to-end product flow (actors, sequence, state machine, built vs
 | Injection demo | not visible | Fake-receipt prompt injection should not authorize funding |
 
 These are intended product differences. The current repository does not yet
-implement or verify every TrustLock target; see the implementation status and
+implement or verify every Podlock target; see the implementation status and
 milestones below.
 
 Patterns we *do* copy from neighbours: ClearSend's scoped function-call keys and do-X-see-Y README; [Penstock](https://github.com/ace-coderr/penstock)'s real mainnet proof and honest demo/dry/live labels; [NairaRails](https://github.com/Esimuda/nairarails)'s African money framing and short problem-first demo.

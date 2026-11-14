@@ -2,7 +2,7 @@
 
 All photos are from [Pexels](https://www.pexels.com) under the [Pexels License](https://www.pexels.com/license/)
 (free for commercial use, no attribution required). We credit the photographers anyway.
-The people shown are not TrustLock customers, sellers, buyers or riders. Photos are never captioned as such.
+The people shown are not Podlock customers, sellers, buyers or riders. Photos are never captioned as such.
 
 Converted from the full-resolution originals to WebP at 1600 px wide; `next/image` serves AVIF/WebP at the right size.
 

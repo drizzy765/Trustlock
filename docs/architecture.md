@@ -1,6 +1,6 @@
 # Architecture
 
-TrustLock is three pieces: a non-custodial NEAR escrow, a deal agent that writes terms and checks naira receipts, and a small Next.js UI. Money movement always happens in the contract. The agent proposes; it does not pay.
+Podlock is three pieces: a non-custodial NEAR escrow, a deal agent that writes terms and checks naira receipts, and a small Next.js UI. Money movement always happens in the contract. The agent proposes; it does not pay.
 
 ## State machine
 
@@ -39,7 +39,7 @@ sequenceDiagram
     participant Agent as Deal agent
     participant UI as Next.js
     participant Intents as 1Click / Intents
-    participant Escrow as TrustLock contract
+    participant Escrow as Podlock contract
     participant Rider
     participant Seller
 

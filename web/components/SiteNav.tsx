@@ -75,8 +75,8 @@ export default function SiteNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-ink-950">
       <nav aria-label="Main" className="mx-auto flex h-16 max-w-[1200px] items-center gap-8 px-5 md:px-8">
-        <Link href="/" aria-label="TrustLock home" className="flex shrink-0 items-center rounded-[6px]">
-          <Image src="/brand/trustlock-logo-dark.svg" alt="TrustLock" width={105} height={28} priority className="h-6 w-auto md:h-7" />
+        <Link href="/" aria-label="Podlock home" className="flex shrink-0 items-center rounded-[6px]">
+          <Image src="/brand/trustlock-logo-dark.svg" alt="Podlock" width={91} height={28} priority className="h-6 w-auto md:h-7" />
         </Link>
         <ul className="hidden h-full items-stretch gap-6 lg:flex">
           {LINKS.map((l) => {

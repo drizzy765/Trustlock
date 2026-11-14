@@ -1,6 +1,6 @@
 # Benchmark — safety battery
 
-TrustLock's "eval" is not model accuracy. It is whether money can be stolen, released twice, released by an LLM, or released with a replayed QR.
+Podlock's "eval" is not model accuracy. It is whether money can be stolen, released twice, released by an LLM, or released with a replayed QR.
 
 Run these before recording anything.
 

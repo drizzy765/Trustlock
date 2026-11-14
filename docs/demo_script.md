@@ -24,7 +24,7 @@ On screen: an Instagram DM. A buyer sends a transfer screenshot. A seller in Lag
 
 Say:
 
-> Across Africa, sellers on Instagram, WhatsApp, Telegram and other chat apps lose goods to fake transfer screenshots — a Lagos bank transfer alert, a Nairobi M-Pesa message, an Accra MoMo notification. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery. TrustLock does not connect to those bank or telecom rails; it locks USDC in escrow and releases only on delivery proof.
+> Across Africa, sellers on Instagram, WhatsApp, Telegram and other chat apps lose goods to fake transfer screenshots — a Lagos bank transfer alert, a Nairobi M-Pesa message, an Accra MoMo notification. Buyers do not want to pay first. Both sides get stuck between pay-now and pay-on-delivery. Podlock does not connect to those bank or telecom rails; it locks USDC in escrow and releases only on delivery proof.
 
 ## 0:12–0:28 — The lock (only after the testnet gate)
 
@@ -73,7 +73,7 @@ mainnet link only if a real, safely sized mainnet transfer was completed.
 
 Say:
 
-> TrustLock is being built for pay-on-delivery in African social commerce.
+> Podlock is being built for pay-on-delivery in African social commerce.
 > This is a [testnet / mainnet] transaction, and the code and current test
 > status are public.
 

@@ -293,7 +293,7 @@ REFUSAL_MESSAGES: dict[str, dict[str, str]] = {
     SECRET_REQUEST.reason: {
         "en": (
             "I can't share or return keys, seed phrases or credentials, and nobody should ever "
-            "paste them into a chat. The TrustLock agent holds no key that can move funds."
+            "paste them into a chat. The Podlock agent holds no key that can move funds."
         ),
         "pcm": (
             "I no fit share or return key, seed phrase or any secret, and make you no ever paste "

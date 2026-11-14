@@ -10,7 +10,7 @@ export interface AgentProvider {
 
 /** Used only when the agent API can't be reached. Mirrors the API as of 14 Nov 2026, and claims nothing more. */
 export const FALLBACK_PROVIDERS: AgentProvider[] = [
-  { id: "builtin", label: "Built-in TrustLock agent", status: "works_with", needs_key: false },
+  { id: "builtin", label: "Built-in Podlock agent", status: "works_with", needs_key: false },
   { id: "anthropic", label: "Anthropic Claude", status: "planned", needs_key: true },
   { id: "openai", label: "OpenAI ChatGPT (via API)", status: "planned", needs_key: true },
   { id: "gemini", label: "Google Gemini", status: "planned", needs_key: true },

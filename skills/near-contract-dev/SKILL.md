@@ -1,4 +1,4 @@
-# Skill: NEAR contract development (TrustLock)
+# Skill: NEAR contract development (Podlock)
 
 ## When to use
 

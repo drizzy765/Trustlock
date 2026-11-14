@@ -14,7 +14,7 @@ from typing import Any
 from .deal_agent import preview_terms
 from .receipt import check_receipt
 
-DEAL_ID = {"type": "integer", "minimum": 1, "description": "TrustLock draft deal id."}
+DEAL_ID = {"type": "integer", "minimum": 1, "description": "Podlock draft deal id."}
 
 
 def _schema(properties: dict, required: list[str]) -> dict:

@@ -1,4 +1,4 @@
-"""The built-in TrustLock agent: deterministic, no key, works offline."""
+"""The built-in Podlock agent: deterministic, no key, works offline."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from .base import AgentReply
 
 class BuiltinProvider:
     id = "builtin"
-    label = "Built-in TrustLock agent"
+    label = "Built-in Podlock agent"
     status = "works_with"
     needs_key = False
 
