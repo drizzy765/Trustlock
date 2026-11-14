@@ -1,56 +1,66 @@
-import { keyStores } from "near-api-js";
-import { network } from "./config";
+import { getActiveWallet } from "./wallet";
+
+/** Who the signed message is for. The agent rejects anything else. */
+export const SELLER_AUTH_RECIPIENT = "trustlock-agent";
+
+/** Header the seller pages attach to agent calls. Never rename it. */
+export const SELLER_AUTH_HEADER = "X-TrustLock-Auth";
+
+/** The exact sentence the seller signs. The agent checks it byte for byte. */
+export function sellerAuthMessage(accountId: string): string {
+  return `TrustLock seller auth:${accountId}`;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+export interface SellerAuthEnvelope {
+  account_id: string;
+  message: string;
+  /** 32 fresh random bytes, base64. */
+  nonce: string;
+  recipient: string;
+  public_key: string;
+  /** ed25519 signature of the NEP-413 payload, base64. */
+  signature: string;
+}
 
 /**
- * Proof that this browser controls the seller's NEAR account, for the agent's seller writes.
- *
- * Signs a NEP-413 message ({action, seller_id, timestamp} JSON, a random 32-byte nonce, and the
- * recipient "trustlock-agent") with the access key the wallet created for Podlock (formerly TrustLock) at sign-in.
- * The agent checks the signature, the age (5 minutes), the nonce (single use) and, over NEAR RPC,
- * that the key belongs to the seller account. The private key never leaves the browser.
+ * Sign the NEP-413 seller-auth payload with the connected wallet and return
+ * the value for the X-TrustLock-Auth header. No local keys are used: the
+ * wallet holds the only key, and the signature never leaves this envelope.
  */
-export type SellerAction = "set_provider" | "set_key" | "delete_key" | "test" | "ask";
-
-export const SELLER_AUTH_HEADER = "X-TrustLock-Auth";
-const RECIPIENT = process.env.NEXT_PUBLIC_AGENT_AUTH_RECIPIENT ?? "trustlock-agent";
-const NEP413_TAG = 2 ** 31 + 413;
-
-function u32(n: number): Uint8Array {
-  const out = new Uint8Array(4);
-  new DataView(out.buffer).setUint32(0, n, true);
-  return out;
-}
-
-function borshString(value: string): Uint8Array {
-  const raw = new TextEncoder().encode(value);
-  return concat(u32(raw.length), raw);
-}
-
-function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-  let offset = 0;
-  for (const p of parts) {
-    out.set(p, offset);
-    offset += p.length;
+export async function sellerAuthHeader(accountId: string): Promise<Record<string, string>> {
+  const wallet = await getActiveWallet();
+  if (!wallet) throw new Error("Connect a wallet first");
+  if (typeof wallet.signMessage !== "function") {
+    throw new Error("This wallet cannot sign messages");
   }
-  return out;
-}
 
-function base64(bytes: Uint8Array): string {
-  let s = "";
-  bytes.forEach((b) => (s += String.fromCharCode(b)));
-  return btoa(s);
-}
+  const accounts = await wallet.getAccounts();
+  const account = accounts[0]?.accountId;
+  if (!account || (accountId && account !== accountId)) {
+    throw new Error("Connect the seller wallet first");
+  }
 
-export async function sellerAuthHeader(sellerId: string, action: SellerAction): Promise<Record<string, string>> {
-  const keyPair = await new keyStores.BrowserLocalStorageKeyStore().getKey(network, sellerId);
-  if (!keyPair) throw new Error("Reconnect your wallet so Podlock can confirm you own this account.");
-  const message = JSON.stringify({ action, seller_id: sellerId, timestamp: Date.now() });
   const nonce = crypto.getRandomValues(new Uint8Array(32));
-  // NEP-413: sha256(borsh(u32 tag) ++ borsh({message, nonce, recipient, callbackUrl: None}))
-  const payload = concat(u32(NEP413_TAG), borshString(message), nonce, borshString(RECIPIENT), new Uint8Array([0]));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", payload));
-  const { signature } = keyPair.sign(digest);
-  const proof = { public_key: keyPair.getPublicKey().toString(), signature: base64(signature), nonce: base64(nonce), message };
-  return { [SELLER_AUTH_HEADER]: btoa(JSON.stringify(proof)) };
+  const signed = await wallet.signMessage({
+    message: sellerAuthMessage(account),
+    recipient: SELLER_AUTH_RECIPIENT,
+    nonce: nonce as Buffer,
+  });
+  if (!signed) throw new Error("Message signing was rejected");
+
+  const envelope: SellerAuthEnvelope = {
+    account_id: signed.accountId || account,
+    message: sellerAuthMessage(account),
+    nonce: bytesToBase64(nonce),
+    recipient: SELLER_AUTH_RECIPIENT,
+    public_key: signed.publicKey,
+    signature: signed.signature,
+  };
+  return { [SELLER_AUTH_HEADER]: bytesToBase64(new TextEncoder().encode(JSON.stringify(envelope))) };
 }

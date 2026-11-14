@@ -6,7 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu, Wallet, X, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { initNearWithTimeout, getAccountId, signIn, signOut } from "@/lib/near";
+import { initNear, signIn, signOut } from "@/lib/near";
+import { setupSelector } from "@/lib/wallet";
 import { middle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import NetworkChip from "./NetworkChip";
@@ -32,9 +33,20 @@ export default function SiteNav() {
 
   useEffect(() => {
     // Only swaps the Connect button for the account once the wallet is ready. Never blocks the button.
-    initNearWithTimeout()
-      .then(() => setAccountId(getAccountId()))
+    // The selector modal signs in outside React, so follow the selector store afterwards.
+    let unsubscribe: { unsubscribe: () => void } | null = null;
+    initNear()
+      .then(async ({ accountId }) => {
+        setAccountId(accountId);
+        const selector = await setupSelector();
+        unsubscribe = selector.store.observable.subscribe((state) => {
+          setAccountId(state.accounts[0]?.accountId ?? null);
+        });
+      })
       .catch(() => setAccountId(null));
+    return () => {
+      unsubscribe?.unsubscribe();
+    };
   }, []);
 
   useEffect(() => setOpen(false), [pathname]);
@@ -51,8 +63,7 @@ export default function SiteNav() {
   }, [open]);
 
   function disconnect() {
-    signOut();
-    window.location.reload();
+    signOut().then(() => setAccountId(null));
   }
 
   async function connectWallet(e: MouseEvent<HTMLAnchorElement>) {
@@ -60,9 +71,12 @@ export default function SiteNav() {
     if (connecting) return;
     setConnecting(true);
     try {
+      // Opens the selector modal (Meteor Wallet, testnet). The store
+      // subscription above swaps the button once the wallet connects.
       await signIn();
     } catch {
       toast.error("Couldn't open the NEAR wallet. Check your connection and try again.");
+    } finally {
       setConnecting(false);
     }
   }

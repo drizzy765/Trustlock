@@ -260,7 +260,7 @@ flowchart LR
 
 - **Contract** (`contract/`, Rust, near-sdk 5): holds the USDC and is the only thing that moves it.
 - **Agent** (`agent/`, Python FastAPI): drafts deal terms, stores drafts in SQLite, reads chain state with view calls and serves `/docs`. It holds **no** key that can sign for escrow funds.
-- **Web** (`web/`, Next.js 15, React 19, Tailwind CSS 4, near-api-js with MyNearWallet): seller link, buyer pay, rider scan, History and seller agent settings.
+- **Web** (`web/`, Next.js 15, React 19, Tailwind CSS 4, near-api-js with Meteor Wallet through the wallet selector): seller link, buyer pay, rider scan, History and seller agent settings.
 
 More detail: [docs/architecture.md](docs/architecture.md), [docs/end_to_end_flow.md](docs/end_to_end_flow.md), [docs/api.md](docs/api.md).
 

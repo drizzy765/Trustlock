@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { setupSelector, getAccount, signOut } from "@/lib/wallet";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { getModal, setupSelector, signOut } from "@/lib/wallet";
 
 interface WalletContextType {
   accountId: string | null;
@@ -19,39 +19,47 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkConnection();
+    let subscription: { unsubscribe: () => void } | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const selector = await setupSelector();
+        if (cancelled) return;
+        const state = selector.store.getState();
+        setAccountId(state.accounts[0]?.accountId ?? null);
+        // The modal signs in outside React: follow the selector store.
+        subscription = selector.store.observable.subscribe((next) => {
+          setAccountId(next.accounts[0]?.accountId ?? null);
+        });
+      } catch (e) {
+        console.log("Wallet not connected");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  async function checkConnection() {
-    try {
-      const account = await getAccount();
-      setAccountId(account?.accountId || null);
-    } catch (e) {
-      console.log("Wallet not connected");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  const showModal = useCallback(async () => {
+    const modal = await getModal();
+    modal.show();
+  }, []);
 
-  async function connect() {
+  const connect = useCallback(async () => {
     try {
       await showModal();
-      await checkConnection();
     } catch (e) {
       console.error("Failed to connect:", e);
     }
-  }
+  }, [showModal]);
 
-  async function showModal() {
-    const { getModal } = await import("@/lib/wallet");
-    const modal = await getModal();
-    modal.show();
-  }
-
-  async function disconnect() {
+  const disconnect = useCallback(async () => {
     await signOut();
     setAccountId(null);
-  }
+  }, []);
 
   return (
     <WalletContext.Provider
