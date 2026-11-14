@@ -143,6 +143,9 @@ still resolves to the completed payout (the `Disputed` flag is superseded, not p
 `open_dispute` during flight was deliberately *not* blocked — blocking it would need new
 in-flight tracking, and a failed transfer already restores the pre-call status either way.
 
+Left open deliberately for the hackathon: the fix changes the onboarding flow (the buyer's
+browser must generate the QR secret), which is a product change, not a #58 bug fix.
+
 ### M-4: unpaid storage — OPEN known limitation
 
 `create_deal` is not payable and has no caller check; `item` has no length limit. Anyone can
@@ -154,6 +157,9 @@ Test: `m4_anyone_creates_deals_and_the_contract_pays_storage`.
 Fix: make `create_deal` `#[payable]` and require a storage deposit (or measure
 `env::storage_usage()` before and after and charge the difference), cap `item` (for example 200
 bytes, as the agent's draft already does), and require `predecessor == seller`.
+
+Left open deliberately for the hackathon: fixing it changes the storage economics of
+`create_deal`, which is a product decision, not a #58 bug fix.
 
 ### M-5: second resolve/timeout claim starts a second transfer — FIXED in #58
 
@@ -189,8 +195,8 @@ the price locked with no timeout refund. Cap it (the agent already caps drafts a
 
 - `confirm_delivery` after the deadline fails with `ERR_NOT_EXPIRED` (line 170), which reads as
   the opposite. Use a `ERR_DEADLINE_PASSED` code.
-- `hex_keccak` (line 404) is SHA-256, not Keccak, and it hashes the trimmed UTF-8 bytes of the hex string (the text `"ab12..."`), not the decoded bytes. A client that hashes decoded bytes gets a different hash and can never confirm. Document this encoding in `docs/api.md` and rename the function.
-- `claim_timeout_refund` (line 229) always panics; drop it or document it.
+- `hex_keccak` (line 404) is SHA-256, not Keccak, and it hashes the trimmed UTF-8 bytes of the hex string (the text `"ab12..."`), not the decoded bytes. A client that hashes decoded bytes gets a different hash and can never confirm. Document this encoding in `docs/api.md` and rename the function. (Done in #58: renamed to `sha256_hex`.)
+- `claim_timeout_refund` (line 229) always panics; drop it or document it. (Done in #58: stub removed; use `claim_timeout_refund_for`.)
 - `ERR_ALREADY_RELEASED` and `ERR_NO_PAYER` are never used.
 - `cancel_unfunded` records a cancelled deal as `Refunded` although no money moved; a separate
   `Cancelled` status would make the history honest.
