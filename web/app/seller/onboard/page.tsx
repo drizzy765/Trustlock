@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Copy, Link2, MessageCircle, Plus, Share2, Store, Wallet } from "lucide-react";
-import { initNear, getAccountId, signIn } from "@/lib/near";
+import { initNear, signIn } from "@/lib/near";
+import { setupSelector } from "@/lib/wallet";
 import { agentUrl } from "@/lib/config";
 import { fetchHealth, type Mode } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
@@ -67,13 +68,22 @@ export default function SellerOnboardPage() {
   useEffect(() => setCanShare(typeof navigator.share === "function"), []);
 
   useEffect(() => {
-    initNear().then(() => {
-      setAccountId(getAccountId());
+    let unsubscribe: { unsubscribe: () => void } | null = null;
+    initNear().then(async ({ accountId }) => {
+      setAccountId(accountId);
+      // The Connect modal signs in outside React: follow the selector store.
+      const selector = await setupSelector();
+      unsubscribe = selector.store.observable.subscribe((state) => {
+        setAccountId(state.accounts[0]?.accountId ?? null);
+      });
       setIsLoading(false);
     });
     fetchHealth().then((health) => {
       if (health?.mode) setMode(health.mode);
     });
+    return () => {
+      unsubscribe?.unsubscribe();
+    };
   }, []);
 
   // Rates are needed only for a local currency. If both sources fail, local input is disabled.

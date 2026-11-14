@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { ChevronDown, ScanLine, Wallet } from "lucide-react";
-import { initNear, isSignedIn, getAccountId, signIn, confirmDelivery, getDeal, getExplorerUrl } from "@/lib/near";
+import { initNear, signIn, confirmDelivery, getDeal, getExplorerUrl, txHashOf } from "@/lib/near";
+import { setupSelector } from "@/lib/wallet";
 import { contractId } from "@/lib/config";
 import { fetchHealth, type Mode } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
@@ -33,8 +34,14 @@ export default function ScanPage() {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    initNear().then(() => {
-      setAccountId(getAccountId());
+    let unsubscribe: { unsubscribe: () => void } | null = null;
+    initNear().then(async ({ accountId }) => {
+      setAccountId(accountId);
+      // The Connect modal signs in outside React: follow the selector store.
+      const selector = await setupSelector();
+      unsubscribe = selector.store.observable.subscribe((state) => {
+        setAccountId(state.accounts[0]?.accountId ?? null);
+      });
       setIsLoading(false);
     });
     fetchHealth().then((health) => {
@@ -43,6 +50,10 @@ export default function ScanPage() {
     // ?deal=<id> prefills the deal field (from a rider's link).
     const fromLink = new URLSearchParams(window.location.search).get("deal");
     if (fromLink && /^\d+$/.test(fromLink)) setDealId(fromLink);
+    return () => {
+      unsubscribe?.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleConnect() {
@@ -75,7 +86,7 @@ export default function ScanPage() {
       setResult({
         success: true,
         message: "Delivery confirmed! Funds released to seller.",
-        tx_hash: result.transaction.hash,
+        tx_hash: txHashOf(result),
         deal_id: dealId,
         mode: mode,
       });

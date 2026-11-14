@@ -1,114 +1,88 @@
-import { connect, Contract, keyStores, WalletConnection } from "near-api-js";
-import { contractId, network } from "./config";
+import { providers } from "near-api-js";
+import type { FinalExecutionOutcome } from "near-api-js/lib/providers";
+import { contractId } from "./config";
+import {
+  getAccountId as selectorAccountId,
+  getActiveWallet,
+  getModal,
+  getNetworkConfig,
+  setupSelector,
+  signOut as selectorSignOut,
+} from "./wallet";
 
-const getConfig = () => {
-  switch (network) {
-    case "mainnet":
-      return {
-        networkId: "mainnet",
-        nodeUrl: "https://rpc.mainnet.near.org",
-        walletUrl: "https://wallet.near.org",
-        helperUrl: "https://helper.mainnet.near.org",
-        explorerUrl: "https://nearblocks.io",
-      };
-    case "testnet":
-    default:
-      return {
-        networkId: "testnet",
-        nodeUrl: "https://rpc.testnet.near.org",
-        walletUrl: "https://testnet.mynearwallet.com",
-        helperUrl: "https://helper.testnet.near.org",
-        explorerUrl: "https://testnet.nearblocks.io",
-      };
-  }
-};
+export { getExplorerUrl } from "./wallet";
 
-let near: any = null;
-let wallet: WalletConnection | null = null;
-let contract: any = null;
+const CREATE_GAS = "300000000000000";
+const FUND_GAS = "50000000000000";
+const NO_DEPOSIT = "0";
+const ONE_YOCTO = "1";
 
-let initPromise: Promise<{ near: any; wallet: WalletConnection; contract: any }> | null = null;
+/** First transaction hash found on a selector send outcome, whatever its shape. */
+export function txHashOf(outcome: unknown): string {
+  const o = outcome as {
+    transaction?: { hash?: string; id?: string };
+    transaction_outcome?: { id?: string };
+  };
+  const hash = o?.transaction?.hash ?? o?.transaction?.id ?? o?.transaction_outcome?.id;
+  if (!hash) throw new Error("Transaction produced no hash");
+  return hash;
+}
 
-async function doInit() {
-  const config = getConfig();
-  const keyStore = new keyStores.BrowserLocalStorageKeyStore();
+/**
+ * Initialise the wallet selector (Meteor Wallet, testnet) and report the
+ * signed-in account, if any. Safe to call on every page load.
+ */
+export async function initNear(): Promise<{ accountId: string | null }> {
+  await setupSelector();
+  return { accountId: await selectorAccountId() };
+}
 
-  const n = await connect({
-    networkId: config.networkId,
-    nodeUrl: config.nodeUrl,
-    walletUrl: config.walletUrl,
-    helperUrl: config.helperUrl,
-    keyStore,
+export async function isSignedIn(): Promise<boolean> {
+  return (await selectorAccountId()) !== null;
+}
+
+export async function getAccountId(): Promise<string | null> {
+  return selectorAccountId();
+}
+
+/** Open the selector's Connect modal (Meteor Wallet on testnet). */
+export async function signIn(): Promise<void> {
+  (await getModal()).show();
+}
+
+export async function signOut(): Promise<void> {
+  await selectorSignOut();
+}
+
+async function sendFunctionCall(options: {
+  receiverId: string;
+  methodName: string;
+  args: object;
+  gas?: string;
+  deposit?: string;
+}): Promise<FinalExecutionOutcome> {
+  const wallet = await getActiveWallet();
+  if (!wallet) throw new Error("Connect a wallet first");
+  const outcome = await wallet.signAndSendTransaction({
+    receiverId: options.receiverId,
+    actions: [
+      {
+        type: "FunctionCall",
+        params: {
+          methodName: options.methodName,
+          args: options.args,
+          gas: options.gas ?? CREATE_GAS,
+          deposit: options.deposit ?? NO_DEPOSIT,
+        },
+      },
+    ],
   });
-
-  const w = new WalletConnection(n, "trustlock");
-
-  const c = new Contract(w.account(), contractId, {
-    viewMethods: ["get_deal"],
-    changeMethods: ["create_deal", "confirm_delivery"],
-    useLocalViewExecution: false,
-  });
-
-  // Commit only after every step succeeded, so a failed attempt can be retried
-  // instead of leaving `near` set and `wallet` null (which made signIn a silent no-op).
-  near = n;
-  wallet = w;
-  contract = c;
-  return { near, wallet: w, contract };
+  if (!outcome) throw new Error("Transaction was not completed");
+  return outcome;
 }
 
-/** Initialise near-api-js once. Concurrent callers share one attempt; a failed attempt is retried next time. */
-export function initNear() {
-  if (near && wallet && contract) return Promise.resolve({ near, wallet, contract });
-  if (!initPromise) {
-    initPromise = doInit().catch((err) => {
-      initPromise = null;
-      throw err;
-    });
-  }
-  return initPromise;
-}
+// Contract method wrappers (every write goes through the connected wallet).
 
-/** initNear with a time limit, for UI that must not wait forever. */
-export function initNearWithTimeout(ms = 8000) {
-  return Promise.race([
-    initNear(),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("NEAR wallet setup timed out")), ms)),
-  ]);
-}
-
-export function getWallet() {
-  return wallet;
-}
-
-export function getContract() {
-  return contract;
-}
-
-export function isSignedIn() {
-  return wallet?.isSignedIn() || false;
-}
-
-export function getAccountId() {
-  return wallet?.getAccountId() || null;
-}
-
-/** Redirects to MyNearWallet. Initialises on demand and throws if the wallet can't be set up. */
-export async function signIn(opts: { successUrl?: string } = {}) {
-  const { wallet: w } = await initNearWithTimeout();
-  await w.requestSignIn({ contractId, keyType: "ed25519", ...(opts.successUrl ? { successUrl: opts.successUrl } : {}) });
-}
-
-export function signOut() {
-  wallet?.signOut();
-}
-
-export function getExplorerUrl(txHash: string) {
-  const config = getConfig();
-  return `${config.explorerUrl}/txns/${txHash}`;
-}
-
-// Contract method wrappers
 export async function createDeal(
   seller: string,
   rider: string,
@@ -118,45 +92,94 @@ export async function createDeal(
   deadlineMs: number,
   qrHashHex: string
 ) {
-  if (!contract) await initNear();
-  return contract.create_deal(
-    { seller, rider, buyer, item, price, deadline_ms: deadlineMs, qr_hash_hex: qrHashHex },
-    "300000000000000", // 300 Tgas
-    "0" // not #[payable]; a deposit panics. Zero also lets the function-call access key sign without a wallet redirect.
-  );
-}
-
-export async function getDeal(dealId: number) {
-  if (!contract) await initNear();
-  return contract.get_deal({ deal_id: dealId });
+  return sendFunctionCall({
+    receiverId: contractId,
+    methodName: "create_deal",
+    args: { seller, rider, buyer, item, price, deadline_ms: deadlineMs, qr_hash_hex: qrHashHex },
+    gas: CREATE_GAS,
+    deposit: NO_DEPOSIT,
+  });
 }
 
 export async function confirmDelivery(dealId: number, qrPreimageHex: string) {
-  if (!contract) await initNear();
-  return contract.confirm_delivery(
-    { deal_id: dealId, qr_preimage_hex: qrPreimageHex },
-    "300000000000000", // 0.3 NEAR for gas
-    "0"
-  );
+  return sendFunctionCall({
+    receiverId: contractId,
+    methodName: "confirm_delivery",
+    args: { deal_id: dealId, qr_preimage_hex: qrPreimageHex },
+    gas: CREATE_GAS,
+    deposit: NO_DEPOSIT,
+  });
+}
+
+/** Buyer one-tap release when the item arrived without a rider scan. */
+export async function confirmReceipt(dealId: number) {
+  return sendFunctionCall({
+    receiverId: contractId,
+    methodName: "confirm_receipt",
+    args: { deal_id: dealId },
+    gas: FUND_GAS,
+    deposit: NO_DEPOSIT,
+  });
+}
+
+/** Refund the buyer after the deadline passed with no delivery. */
+export async function claimTimeoutRefund(dealId: number) {
+  return sendFunctionCall({
+    receiverId: contractId,
+    methodName: "claim_timeout_refund_for",
+    args: { deal_id: dealId },
+    gas: CREATE_GAS,
+    deposit: NO_DEPOSIT,
+  });
 }
 
 export async function fundDeal(dealId: number, amount: string, usdcContractId: string) {
-  if (!wallet) await initNear();
-  if (!wallet) throw new Error("Wallet not initialized");
-  
-  const account = wallet.account();
-  
-  // Call ft_transfer_call on USDC token contract
-  // msg is the plain deal_id string (e.g., "1"), NOT JSON
-  return account.functionCall({
-    contractId: usdcContractId,
-    methodName: "ft_transfer_call",
-    args: {
-      receiver_id: contractId,
-      amount: amount,
-      msg: dealId.toString()
-    },
-    gas: BigInt("50000000000000"), // 50 Tgas
-    attachedDeposit: BigInt(1) // 1 yoctoNEAR required by NEP-141
+  const wallet = await getActiveWallet();
+  if (!wallet) throw new Error("Connect a wallet first");
+
+  // Call ft_transfer_call on the USDC token contract.
+  // msg is the plain deal_id string (e.g. "1"), NOT JSON.
+  const outcome = await wallet.signAndSendTransaction({
+    receiverId: usdcContractId,
+    actions: [
+      {
+        type: "FunctionCall",
+        params: {
+          methodName: "ft_transfer_call",
+          args: {
+            receiver_id: contractId,
+            amount,
+            msg: dealId.toString(),
+          },
+          gas: FUND_GAS,
+          deposit: ONE_YOCTO, // 1 yoctoNEAR required by NEP-141
+        },
+      },
+    ],
   });
+  if (!outcome) throw new Error("Transaction was not completed");
+  return outcome;
+}
+
+// View calls go straight to RPC — no wallet needed.
+
+function rpcProvider() {
+  return new providers.JsonRpcProvider({ url: getNetworkConfig().nodeUrl });
+}
+
+function decodeCallResult(result: Array<number>): unknown {
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(result)));
+}
+
+export async function getDeal(dealId: number) {
+  const provider = rpcProvider();
+  const res = (await provider.query({
+    request_type: "call_function",
+    account_id: contractId,
+    method_name: "get_deal",
+    args_base64: btoa(JSON.stringify({ deal_id: dealId })),
+    finality: "optimistic",
+  })) as unknown as { result: Array<number> };
+  if (!res || !Array.isArray(res.result)) throw new Error("Bad get_deal response");
+  return decodeCallResult(res.result);
 }

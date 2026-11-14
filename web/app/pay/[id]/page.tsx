@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { contractId, usdcToken, network, agentUrl } from "@/lib/config";
-import { initNear, getAccountId, signIn, getDeal, getExplorerUrl, fundDeal, createDeal } from "@/lib/near";
+import { usdcToken, network, agentUrl } from "@/lib/config";
+import { initNear, signIn, getDeal, getExplorerUrl, fundDeal, createDeal, confirmReceipt, claimTimeoutRefund, txHashOf } from "@/lib/near";
+import { setupSelector } from "@/lib/wallet";
 import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifiedAmount, isQuoteExpired, quoteDeadlineMs, type Mode, type Quote } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
@@ -267,14 +268,23 @@ export default function PayDealPage() {
   }
 
   useEffect(() => {
-    initNear().then(() => {
-      setAccountId(getAccountId());
+    let unsubscribe: { unsubscribe: () => void } | null = null;
+    initNear().then(async ({ accountId }) => {
+      setAccountId(accountId);
+      // The Connect modal signs in outside React: follow the selector store.
+      const selector = await setupSelector();
+      unsubscribe = selector.store.observable.subscribe((state) => {
+        setAccountId(state.accounts[0]?.accountId ?? null);
+      });
       load().catch((e) => {
         console.error("Failed to load deal:", e);
         setError(e instanceof Error ? e.message : "Failed to load this deal.");
         setIsLoading(false);
       });
     });
+    return () => {
+      unsubscribe?.unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId]);
 
@@ -356,7 +366,7 @@ export default function PayDealPage() {
     setDraft(linkData as Draft);
 
     const fundResult = await fundDeal(newOnchainId, priceUsdc.toString(), usdcToken);
-    setTxHash(fundResult.transaction.hash as string);
+    setTxHash(txHashOf(fundResult));
     await loadDealById(newOnchainId);
   }
 
@@ -445,7 +455,7 @@ export default function PayDealPage() {
     setError(null);
     try {
       const fundResult = await fundDeal(onchainId, deal.price.toString(), usdcToken);
-      setTxHash(fundResult.transaction.hash as string);
+      setTxHash(txHashOf(fundResult));
       await loadDealById(onchainId);
     } catch (e) {
       console.error("Fund deal failed:", e);
@@ -460,19 +470,8 @@ export default function PayDealPage() {
     setIsConfirming(true);
     setError(null);
     try {
-      const { initNear } = await import("@/lib/near");
-      const { wallet } = await initNear();
-      if (!wallet) throw new Error("Wallet not initialized");
-
-      const result = await wallet.account().functionCall({
-        contractId: contractId,
-        methodName: "confirm_receipt",
-        args: { deal_id: onchainId },
-        gas: BigInt("50000000000000"), // 50 Tgas
-        attachedDeposit: BigInt(0)
-      });
-
-      setTxHash(result.transaction.hash as string);
+      const result = await confirmReceipt(onchainId);
+      setTxHash(txHashOf(result));
       await loadDealById(onchainId);
     } catch (e) {
       console.error("Confirm receipt failed:", e);
@@ -480,6 +479,23 @@ export default function PayDealPage() {
     } finally {
       setIsConfirming(false);
       setShowConfirmModal(false);
+    }
+  }
+
+  /** Refund the buyer after the deadline passed with no delivery. */
+  async function handleClaimRefund() {
+    if (!deal || onchainId === null || !accountId || isWorking) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      const result = await claimTimeoutRefund(onchainId);
+      setTxHash(txHashOf(result));
+      await loadDealById(onchainId);
+    } catch (e) {
+      console.error("Claim refund failed:", e);
+      toast.error("Failed to claim refund: " + (e instanceof Error ? e.message : String(e)), { duration: Infinity });
+    } finally {
+      setIsWorking(false);
     }
   }
 
@@ -738,6 +754,12 @@ export default function PayDealPage() {
 
                 {!isConnected || accountId !== deal.buyer ? (
                   <p className="text-[15px] text-mute">Waiting for the buyer to confirm receipt, or the rider to scan the code.</p>
+                ) : null}
+
+                {typeof deal.deadline_ms === "number" && Date.now() > deal.deadline_ms ? (
+                  <Button variant="secondary" block loading={isWorking} onClick={handleClaimRefund}>
+                    Deadline passed — claim refund
+                  </Button>
                 ) : null}
               </div>
             ) : null}

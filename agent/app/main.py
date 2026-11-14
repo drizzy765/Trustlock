@@ -266,13 +266,13 @@ def _seller(seller_id: str) -> str:
     return seller_id
 
 
-def _owner(action: str):
+def _owner():
     """A dependency: the seller id from the path, once the caller proved they control it."""
 
     def dependency(seller_id: str, x_trustlock_auth: str | None = Header(default=None)) -> str:
         seller = _seller(seller_id)
         try:
-            seller_auth.verify(x_trustlock_auth, seller, action)
+            seller_auth.verify(x_trustlock_auth, seller)
         except seller_auth.AuthError as exc:
             raise ApiError(exc.status, exc.code, exc.message) from None
         return seller
@@ -302,13 +302,13 @@ def seller_agent(seller_id: str) -> dict:
 
 
 @app.put("/sellers/{seller_id}/agent")
-def seller_agent_set_provider(body: ProviderIn, seller_id: str = Depends(_owner("set_provider"))) -> dict:
+def seller_agent_set_provider(body: ProviderIn, seller_id: str = Depends(_owner())) -> dict:
     keys.set_provider(seller_id, _provider(body.provider).id)
     return keys.status(seller_id)
 
 
 @app.put("/sellers/{seller_id}/agent/key")
-def seller_agent_set_key(body: KeyIn, seller_id: str = Depends(_owner("set_key"))) -> dict:
+def seller_agent_set_key(body: KeyIn, seller_id: str = Depends(_owner())) -> dict:
     """Save or rotate the key. The response shows only its last 4 characters."""
     try:
         keys.set_key(seller_id, body.api_key.get_secret_value())
@@ -318,13 +318,13 @@ def seller_agent_set_key(body: KeyIn, seller_id: str = Depends(_owner("set_key")
 
 
 @app.delete("/sellers/{seller_id}/agent/key")
-def seller_agent_delete_key(seller_id: str = Depends(_owner("delete_key"))) -> dict:
+def seller_agent_delete_key(seller_id: str = Depends(_owner())) -> dict:
     deleted = keys.delete_key(seller_id)
     return {**keys.status(seller_id), "deleted": deleted}
 
 
 @app.post("/sellers/{seller_id}/agent/test")
-def seller_agent_test(seller_id: str = Depends(_owner("test"))) -> dict:
+def seller_agent_test(seller_id: str = Depends(_owner())) -> dict:
     seller = seller_id
     provider = _provider(keys.get(seller).provider)
     try:
@@ -338,7 +338,7 @@ def seller_agent_test(seller_id: str = Depends(_owner("test"))) -> dict:
 
 
 @app.post("/sellers/{seller_id}/agent/ask")
-def seller_agent_ask(body: AskIn, seller_id: str = Depends(_owner("ask"))) -> dict:
+def seller_agent_ask(body: AskIn, seller_id: str = Depends(_owner())) -> dict:
     """Run the seller's agent on one message. It can read, check, recommend and prepare unsigned
     transactions; no provider has a tool that moves funds."""
     seller = seller_id

@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ExternalLink, Link2, RotateCw, Wallet } from "lucide-react";
-import { initNear, getAccountId, signIn, getDeal } from "@/lib/near";
+import { initNear, signIn, getDeal } from "@/lib/near";
+import { setupSelector } from "@/lib/wallet";
 import { contractId } from "@/lib/config";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -82,12 +83,22 @@ export default function HistoryPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("status");
     if (TABS.some((t) => t.id === q)) setTab(q as TabId);
-    initNear().then(() => {
-      const id = getAccountId();
-      setAccountId(id);
-      if (id) setScope("mine");
+    let unsubscribe: { unsubscribe: () => void } | null = null;
+    initNear().then(async ({ accountId }) => {
+      setAccountId(accountId);
+      if (accountId) setScope("mine");
+      // The Connect modal signs in outside React: follow the selector store.
+      const selector = await setupSelector();
+      unsubscribe = selector.store.observable.subscribe((state) => {
+        const id = state.accounts[0]?.accountId ?? null;
+        setAccountId(id);
+        if (id) setScope("mine");
+      });
       setWalletReady(true);
     });
+    return () => {
+      unsubscribe?.unsubscribe();
+    };
   }, []);
 
   async function loadDeals() {

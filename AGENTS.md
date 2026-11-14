@@ -102,7 +102,7 @@ PowerShell 5 often breaks on `&&`. Use `;` or separate lines. Do not assume WSL,
    - ✅ `POST /intents/quote` - 1Click quote (dry/live mode)
    - ✅ `POST /intents/execute` - 1Click execute
 8. ✅ Scaffold `web/` pages:
-   - ✅ `/pay` - Wallet selector, deal preview, mode badges
+   - ✅ `/pay` - Wallet selector (Meteor Wallet, testnet), deal preview, mode badges
    - ✅ `/scan` - QR input, rider confirmation
    - ✅ `/dashboard` - Deal list, stats, status badges
 
