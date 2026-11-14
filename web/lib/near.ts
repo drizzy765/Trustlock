@@ -27,13 +27,13 @@ let near: any = null;
 let wallet: WalletConnection | null = null;
 let contract: any = null;
 
-export async function initNear() {
-  if (near) return { near, wallet, contract };
+let initPromise: Promise<{ near: any; wallet: WalletConnection; contract: any }> | null = null;
 
+async function doInit() {
   const config = getConfig();
   const keyStore = new keyStores.BrowserLocalStorageKeyStore();
 
-  near = await connect({
+  const n = await connect({
     networkId: config.networkId,
     nodeUrl: config.nodeUrl,
     walletUrl: config.walletUrl,
@@ -41,15 +41,40 @@ export async function initNear() {
     keyStore,
   });
 
-  wallet = new WalletConnection(near, "trustlock");
+  const w = new WalletConnection(n, "trustlock");
 
-  contract = new Contract(wallet.account(), contractId, {
+  const c = new Contract(w.account(), contractId, {
     viewMethods: ["get_deal"],
     changeMethods: ["create_deal", "confirm_delivery"],
     useLocalViewExecution: false,
   });
 
-  return { near, wallet, contract };
+  // Commit only after every step succeeded, so a failed attempt can be retried
+  // instead of leaving `near` set and `wallet` null (which made signIn a silent no-op).
+  near = n;
+  wallet = w;
+  contract = c;
+  return { near, wallet: w, contract };
+}
+
+/** Initialise near-api-js once. Concurrent callers share one attempt; a failed attempt is retried next time. */
+export function initNear() {
+  if (near && wallet && contract) return Promise.resolve({ near, wallet, contract });
+  if (!initPromise) {
+    initPromise = doInit().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+  return initPromise;
+}
+
+/** initNear with a time limit, for UI that must not wait forever. */
+export function initNearWithTimeout(ms = 8000) {
+  return Promise.race([
+    initNear(),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("NEAR wallet setup timed out")), ms)),
+  ]);
 }
 
 export function getWallet() {
@@ -68,9 +93,10 @@ export function getAccountId() {
   return wallet?.getAccountId() || null;
 }
 
-export async function signIn() {
-  if (!wallet) await initNear();
-  wallet?.requestSignIn({ contractId, keyType: "ed25519" });
+/** Redirects to MyNearWallet. Initialises on demand and throws if the wallet can't be set up. */
+export async function signIn(opts: { successUrl?: string } = {}) {
+  const { wallet: w } = await initNearWithTimeout();
+  await w.requestSignIn({ contractId, keyType: "ed25519", ...(opts.successUrl ? { successUrl: opts.successUrl } : {}) });
 }
 
 export function signOut() {
