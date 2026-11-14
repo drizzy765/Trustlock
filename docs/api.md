@@ -42,7 +42,8 @@ Request limits: `text` is 1 to 2000 characters; `language_hint` is `"pcm"`, `"yo
 
 How the terms are read:
 
-- `price_ngn`: an explicit currency amount first (`₦3,500`, `NGN 3500`, `n3500`), then k notation (`2k5` and `2.5k` are 2,500, `10k`, `12k5`), then `4500 naira`, then Yoruba number words (`egberun marun` is 5,000), then a bare number of 3 to 9 digits. Amounts under 100 or above 100,000,000 are ignored (so a huge number is "no price", never an error). `null` if none.
+- USDC first: `12 USDC`, `12usdc`, `$12`, `USDC 12` (also `usd`, `dollars`). Then `currency` is `"USDC"` and `price_ngn` is in the draft price unit, **USDC x 1000** (12 USDC is `12000`; x 1000 again gives the 12,000,000 base units the contract locks). Those digits are never re-read as naira.
+- `price_ngn` (when no USDC amount, `currency` `"NGN"`): an explicit currency amount first (`₦3,500`, `NGN 3500`, `n3500`), then k notation (`2k5` and `2.5k` are 2,500, `10k`, `12k5`), then `4500 naira`, then Yoruba number words (`egberun marun` is 5,000), then a bare number of 3 to 9 digits. Amounts under 100 or above 100,000,000 are ignored (so a huge number is "no price", never an error). `null` if none.
 - `deadline_hours`: 24 for tomorrow or today (`tomorrow`, `tmrw`, `ni ọ̀la`), `N x 24` for `N days`, otherwise 48.
 - `item`: what is left once the price, delivery and filler words are removed (a number is dropped only when it is the price: `iPhone 12` keeps its 12), in the buyer's own spelling (Yoruba accents kept). `"item"` if nothing is left.
 - `warning`: `"No price found: confirm the amount with the buyer."` when there is no price, or `"More than one amount found (2500, 20000): confirm the price."` when the text has different amounts. The agent never picks silently between them.
@@ -262,8 +263,26 @@ Status today: `builtin` works with. `anthropic` (Claude, official SDK, default m
 yet against the live API, so it stays `planned`. OpenAI, Gemini, OpenRouter and Muse are listed as
 `planned` and refuse test and ask.
 
-Limits: these endpoints have no seller authentication yet, so anyone who knows a seller id can set
-or replace that seller's key (it can never be read back). Storage is in memory, like the drafts.
+### Seller ownership proof
+
+Every write (`PUT /sellers/{id}/agent`, `PUT` and `DELETE /sellers/{id}/agent/key`, `POST .../test`,
+`POST .../ask`) needs an `X-TrustLock-Auth` header; `GET /sellers/{id}/agent` stays public and only
+ever shows the masked key. The header is base64 of
+`{"public_key": "ed25519:...", "signature": base64, "nonce": base64 (32 bytes), "message": string}`,
+where `message` is JSON `{"action", "seller_id", "timestamp"}` (ms), `action` is one of
+`set_provider`, `set_key`, `delete_key`, `test`, `ask`, and the signature is a NEP-413 signature:
+ed25519 over `sha256(u32le(2^31 + 413) || borsh(message, nonce, recipient, callbackUrl = None))` with
+`recipient` = `TRUSTLOCK_AUTH_RECIPIENT` (default `trustlock-agent`).
+
+The agent checks the signature, that action and seller match the request, that the proof is under
+5 minutes old (and not more than 1 minute in the future), and that the nonce is new. It then calls
+NEAR RPC `view_access_key`: the key must be on the seller account, either full access or a
+function-call key scoped to `TRUSTLOCK_CONTRACT_ID` (the key the seller's wallet adds when they
+sign in to TrustLock; set `TRUSTLOCK_AUTH_FULL_ACCESS_ONLY=1` to refuse those). Errors: 401
+`ERR_AUTH_REQUIRED`, `ERR_AUTH_INVALID`, `ERR_AUTH_EXPIRED`, `ERR_AUTH_REPLAY`; 403 `ERR_NOT_OWNER`;
+502 `ERR_RPC`. The web app signs with the wallet's TrustLock key in `web/lib/seller-auth.ts`.
+
+Limits: the nonce cache is in memory (one instance), and storage is in memory, like the drafts.
 
 ## Errors
 

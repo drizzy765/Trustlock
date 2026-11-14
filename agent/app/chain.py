@@ -70,3 +70,38 @@ def view_deal(contract: str, deal_id: int) -> dict[str, Any] | None:
         return json.loads(bytes(result["result"]).decode() or "null")
     except (TypeError, ValueError) as exc:
         raise RpcError("get_deal returned bytes that are not JSON") from exc
+
+
+def view_access_key(account_id: str, public_key: str) -> Any | None:
+    """The permission of `public_key` on `account_id` ("FullAccess" or {"FunctionCall": ...}),
+    or None when the account has no such key (or does not exist)."""
+    payload = {
+        "jsonrpc": "2.0",
+        "id": "trustlock-agent",
+        "method": "query",
+        "params": {
+            "request_type": "view_access_key",
+            "finality": "final",
+            "account_id": account_id,
+            "public_key": public_key,
+        },
+    }
+    try:
+        with _client() as client:
+            response = client.post(rpc_url(), json=payload)
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise RpcError(f"RPC request failed ({type(exc).__name__})") from exc
+
+    error = body.get("error")
+    if error:
+        cause = (error.get("cause") or {}).get("name", "") if isinstance(error, dict) else ""
+        if cause in ("UNKNOWN_ACCESS_KEY", "UNKNOWN_ACCOUNT"):
+            return None
+        raise RpcError("RPC returned an error for view_access_key")
+    result = body.get("result") or {}
+    if result.get("error"):  # older nodes: "access key ... does not exist while viewing"
+        return None
+    if "permission" not in result:
+        raise RpcError("view_access_key did not return a permission")
+    return result["permission"]
