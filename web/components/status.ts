@@ -1,4 +1,4 @@
-/** Contract status → the one state colour, word and icon that represent it. */
+/** Contract status to the one state colour, word and icon that represent it. */
 export type DealState = "created" | "funded" | "released" | "refunded" | "disputed";
 
 export function dealState(status: string | null | undefined): DealState {

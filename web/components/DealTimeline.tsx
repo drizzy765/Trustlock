@@ -27,7 +27,7 @@ const FILL: Record<Tone, string> = {
   bone: "bg-bone",
 };
 
-/** Steps for a contract status. Branches: Disputed, and Expired → Refunded. */
+/** Steps for a contract status. Branches: Disputed, and Expired then Refunded. */
 export function stepsForStatus(status: string | null | undefined, hint?: { txHref?: string }) {
   const created: TimelineStep = { title: "Created", detail: "The seller shared a payment link." };
   const locked: TimelineStep = { title: "Locked", detail: "The buyer locked USDC in escrow on NEAR." };

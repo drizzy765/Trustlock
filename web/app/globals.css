@@ -1,5 +1,5 @@
 /* TrustLock "Solid Vault" theme. Tokens are locked in docs/design_direction.md (addendum).
-   Colour only means deal state. No glass, blur, glow or gradients. */
+   Colour only means deal state. Solid surfaces only, nothing decorative. */
 @import "tailwindcss";
 
 @theme {
@@ -7,7 +7,7 @@
   --color-ink-900: #131513;
   --color-ink-800: #1c1f1c;
   --color-line: #2a2e2a;
-  --color-line-strong: #3a3f3a;
+  --color-line-strong: #666c66; /* 3.4:1 on ink-900: input and control boundaries reach 3:1 */
   --color-bone: #f4f2ee;
   --color-mute: #a3a8a2;
   --color-faint: #8a9089;
@@ -31,6 +31,8 @@
 @layer base {
   html {
     color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     background: var(--color-ink-950);
   }
 

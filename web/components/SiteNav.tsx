@@ -107,7 +107,7 @@ export default function SiteNav() {
         </div>
       </nav>
       {open ? (
-        <div className="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto bg-ink-950 px-5 pt-4 pb-8 lg:hidden">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto overscroll-contain bg-ink-950 px-5 pt-4 pb-8 lg:hidden">
           <ul className="border-t border-line">
             {LINKS.map((l) => {
               const active = isCurrent(pathname, l.href);

@@ -46,8 +46,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-dvh flex-col">
         <WalletProvider>
           <Providers>
+            <a
+              href="#content"
+              className="sr-only z-50 rounded-[8px] bg-bone px-4 py-2 text-ink-950 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+            >
+              Skip to content
+            </a>
             <SiteNav />
-            <div className="flex-1">{children}</div>
+            <div id="content" className="flex-1">
+              {children}
+            </div>
             <SiteFooter />
           </Providers>
         </WalletProvider>
