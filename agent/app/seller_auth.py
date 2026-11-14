@@ -5,13 +5,14 @@ with an ed25519 access key of the seller account (``wallet.signMessage``) and se
 ``X-TrustLock-Auth`` header as base64 of
 ``{"account_id", "message", "nonce", "recipient", "public_key", "signature"}``:
 
-* ``message`` is the canonical sentence for ``account_id`` (``canonical_message``);
+* ``message`` is JSON ``{"action", "seller_id", "timestamp"}`` (timestamp in ms since epoch);
 * ``nonce`` is 32 random bytes (base64), single use;
 * ``recipient`` is ``TRUSTLOCK_AUTH_RECIPIENT`` (default ``trustlock-agent``);
 * the signed bytes are ``sha256(borsh(2**31 + 413) || borsh(message, nonce, recipient, None))``.
 
-The agent checks the recipient, the message, the signature, that the nonce was not seen before,
-and then asks NEAR RPC (``view_access_key``) whether that public key is on the seller account.
+The agent checks the recipient, the action, the seller, the age (5 minutes, so a captured proof
+is worthless after a restart wipes the nonce cache), that the nonce was not seen before, and
+then asks NEAR RPC (``view_access_key``) whether that public key is on the seller account.
 A full-access key always counts. A function-call key counts only when it is scoped to the
 TrustLock contract (``TRUSTLOCK_CONTRACT_ID``). Set ``TRUSTLOCK_AUTH_FULL_ACCESS_ONLY=1`` to
 accept full-access keys only.
@@ -119,9 +120,7 @@ def _invalid(why: str) -> AuthError:
     return AuthError(401, "ERR_AUTH_INVALID", f"Ownership proof rejected: {why}.")
 
 
-def canonical_message(account_id: str) -> str:
-    """The exact sentence the wallet signs. Must match web/lib/seller-auth.ts."""
-    return f"TrustLock seller auth:{account_id}"
+ACTIONS = ("set_provider", "set_key", "delete_key", "test", "ask")
 
 
 def _decode(header: str) -> tuple[str, bytes, bytes, bytes, str, str]:
@@ -135,13 +134,13 @@ def _decode(header: str) -> tuple[str, bytes, bytes, bytes, str, str]:
         signature = base64.b64decode(proof["signature"], validate=True)
     except (binascii.Error, ValueError, KeyError, TypeError):
         raise _invalid("the header is not a valid proof") from None
-    for name, value in (("account_id", account_id), ("message", message), ("recipient", recipient_id)):
+    for name, value in (("account_id", account_id), ("recipient", recipient_id)):
         if not isinstance(value, str) or not value or len(value) > 128:
             raise _invalid(f"bad {name}")
+    if not isinstance(message, str) or not message or len(message) > 512:
+        raise _invalid("bad message")
     if recipient_id != recipient():
         raise _invalid("it was signed for another app")
-    if message != canonical_message(account_id):
-        raise _invalid("it signs another message")
     if not isinstance(public_key, str) or not public_key.startswith("ed25519:"):
         raise _invalid("only ed25519 keys are supported")
     try:
@@ -165,22 +164,35 @@ def _key_counts(permission: object) -> bool:
     return function_call.get("receiver_id") == contract
 
 
-def verify(header: str | None, seller_id: str, now_ms: float | None = None) -> str:
+def verify(header: str | None, seller_id: str, action: str, now_ms: float | None = None) -> str:
     """Return the verified public key, or raise AuthError."""
     if not header:
         raise AuthError(
             401, "ERR_AUTH_REQUIRED", f"Sign this request with your NEAR wallet ({HEADER} header)."
         )
     public_key, key_bytes, signature, nonce, account_id, message = _decode(header)
-    if account_id != seller_id:
-        raise _invalid("it was signed for another seller")
+    if action not in ACTIONS:
+        raise _invalid("unknown action")
+    try:
+        fields = json.loads(message)
+        signed_action, signed_seller, timestamp = fields["action"], fields["seller_id"], fields["timestamp"]
+    except (ValueError, KeyError, TypeError):
+        raise _invalid("the signed message is not seller-auth JSON") from None
+    if not isinstance(timestamp, (int, float)) or isinstance(timestamp, bool):
+        raise _invalid("bad timestamp")
+    if signed_action != action or signed_seller != seller_id or account_id != seller_id:
+        raise _invalid("it was signed for another seller or action")
+    now_ms = time.time() * 1000 if now_ms is None else now_ms
+    if timestamp > now_ms + MAX_FUTURE_SKEW_MS:
+        raise _invalid("bad timestamp")
+    if now_ms - timestamp > MAX_AGE_MS:
+        raise AuthError(401, "ERR_AUTH_EXPIRED", "Ownership proof is older than 5 minutes; sign again.")
     try:
         Ed25519PublicKey.from_public_bytes(key_bytes).verify(
             signature, nep413_hash(message, nonce, recipient())
         )
     except InvalidSignature:
         raise _invalid("the signature does not match") from None
-    now_ms = time.time() * 1000 if now_ms is None else now_ms
     try:
         permission = chain.view_access_key(seller_id, public_key)
     except chain.RpcError as exc:
