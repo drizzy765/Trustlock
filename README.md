@@ -16,11 +16,11 @@ A seller makes a payment link and shares it in any chat. The buyer locks USDC in
 
 | | |
 |---|---|
-| **Live app** (NEAR testnet) | https://trustlock-five.vercel.app |
+| **Live app** (NEAR testnet) | https://podlock.vercel.app/ |
 | **Deal agent API** | https://trustlock-el1w.onrender.com · [`/docs`](https://trustlock-el1w.onrender.com/docs) · [`/health`](https://trustlock-el1w.onrender.com/health) |
 | **Escrow contract** | [`trustlock-v2-timi.testnet`](https://testnet.nearblocks.io/address/trustlock-v2-timi.testnet) (v2, used by the app). Earlier recorded run: [`trustlock-timi.testnet`](https://testnet.nearblocks.io/address/trustlock-timi.testnet) (v1) |
 | **Token** | Circle testnet USDC `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af` (6 decimals) |
-| **Demo video / X post** | TODO: add the X post link after recording |
+| **Demo video / X post** | VIDEO_URL_HERE |
 | **Hackathon tracks** | [NEAR HACKATHON](https://nearhackathon.com): **`realworld`** (Real-World Money) and **`security`** (AI Security & Defense) |
 | **License** | MIT ([LICENSE](LICENSE)) |
 
@@ -73,7 +73,7 @@ curl -s -X POST https://trustlock-el1w.onrender.com/deals/preview \
 ```
 
 4. Open the agent's interactive OpenAPI docs: https://trustlock-el1w.onrender.com/docs
-5. Open the app: https://trustlock-five.vercel.app. Then check `/pay`, `/scan` and `/dashboard` (History).
+5. Open the app: https://podlock.vercel.app/. Then check `/pay`, `/scan` and `/dashboard` (History).
 6. Read the contract state directly from NEAR. The only view method is `get_deal(deal_id)`; there is no `next_id` or list view, so History probes ids.
 
 ```bash
@@ -98,11 +98,11 @@ curl -s https://rpc.testnet.near.org -H 'content-type: application/json' -d '{"j
   - Buyer path, Deal 2, 1 USDC: [create](https://explorer.testnet.near.org/transactions/EQSdDmVruBK66ARUJwnugoYKyghsyUMJBj8qpankgYM3) · [confirm](https://explorer.testnet.near.org/transactions/AsUsXzVDm8NWN7SrqnHopYMEcPCg8W3DRALRY6FuqeJf)
   - Rejected as designed: [replayed QR](https://explorer.testnet.near.org/transactions/AS7csncmuzm5Q76wiMZ27dzfnuXmWvHsvnMdkvzPwuo) (`ERR_BAD_STATUS`) and [wrong rider](https://explorer.testnet.near.org/transactions/E4AsubKszhHqB3wwsy7UVsPP4cPsbQTiRqZJGe2vr9b2) (`ERR_NOT_RIDER`)
 - **v2 deploy and init:** [deploy tx](https://testnet.nearblocks.io/txns/G5Yh8kmEDVRxNJQgPeL2eNRzA8N5GBBuSUsCahJFdG26) (details in [docs/testnet_accounts.md](docs/testnet_accounts.md))
-- **v2 browser end-to-end run (the demo deal):** TODO: deal id `TODO_DEAL_ID` · create `TODO_TX_CREATE` · fund `TODO_TX_FUND` · confirm `TODO_TX_CONFIRM` · replay rejected `TODO_TX_REPLAY_REJECTED`
+- **v2 browser end-to-end run (payment link #6, on-chain deal 2):** fund [FAYCJTqsEidVF7Lu7Ti44tU7xqhohNYLLXeH4xTNogKr](https://testnet.nearblocks.io/txns/FAYCJTqsEidVF7Lu7Ti44tU7xqhohNYLLXeH4xTNogKr) · confirm [Fj2MWhawrmqL5b7hupcgtTMhZhNoR5XFmPu7Di2a4aKS](https://testnet.nearblocks.io/txns/Fj2MWhawrmqL5b7hupcgtTMhZhNoR5XFmPu7Di2a4aKS)
 
 ### Full flow with testnet wallets (about 10 minutes)
 
-You need three testnet accounts (seller, buyer, rider) in **three separate browser profiles**, so the wallet sessions don't mix. The buyer needs at least 1 testnet USDC (Circle's testnet faucet) and a little NEAR for gas. The seller must be registered on the USDC token (`storage_deposit`) to receive the payout.
+You need three testnet accounts (seller, buyer, rider) in **three separate browser profiles**, so the wallet sessions don't mix. Import each testnet account into Meteor Wallet using its private key, then select Meteor Wallet through `@near-wallet-selector` in the app. Allow pop-ups for https://podlock.vercel.app/ so Meteor can open the wallet approval window. Keep the private keys secret. The buyer needs at least 1 testnet USDC (Circle's testnet faucet) and a little NEAR for gas. The seller must be registered on the USDC token (`storage_deposit`) to receive the payout.
 
 1. **Seller:** open `/seller/onboard`, connect the wallet, enter the item, the price (USDC or a local currency), the buyer and rider accounts and a deadline. You get a shareable `/pay/ID` link. No money moves.
 2. **Buyer:** open the link, then *Lock USDC in escrow* and approve in the wallet. You see the deal as Locked, a NearBlocks link and a one-time **delivery QR**.
@@ -201,7 +201,7 @@ All of these are in [.env.example](.env.example). The values shown are public te
 | `TRUSTLOCK_APP_MODE` | No (default `demo`) | `demo`, `dry` or `live`; `live` enables on-chain confirm in the UI | `live` |
 | `NEAR_NETWORK` / `NEAR_NODE_URL` | No | Network and RPC | `testnet` / `https://rpc.testnet.near.org` |
 | `TRUSTLOCK_USDC_ACCOUNT` | No | USDC token contract | `3e2210e1…b8af` |
-| `TRUSTLOCK_ALLOWED_ORIGINS` | Yes in production | Comma-separated browser origins for CORS (never `*`). Defaults to `http://localhost:3000` | `https://trustlock-five.vercel.app` |
+| `TRUSTLOCK_ALLOWED_ORIGINS` | Yes in production | Comma-separated browser origins for CORS (never `*`). Defaults to `http://localhost:3000` | `https://podlock.vercel.app` |
 | `TRUSTLOCK_DB_PATH` | No (default `./trustlock.db`) | SQLite file for deal drafts; point it at a persistent disk in production | `/data/trustlock.db` |
 | `TRUSTLOCK_PUBLIC_URL` | No | URL in the OpenAPI `servers` entry | `https://trustlock-el1w.onrender.com` |
 | `TRUSTLOCK_AUTH_RECIPIENT` | No (default `trustlock-agent`) | NEP-413 recipient for the seller ownership proof; must match the web app | `trustlock-agent` |
@@ -215,7 +215,7 @@ All of these are in [.env.example](.env.example). The values shown are public te
 | `NEXT_PUBLIC_AGENT_URL` | Yes (web) | Agent base URL used by the browser | `http://localhost:8080` |
 | `NEXT_PUBLIC_CONTRACT_ID` | No (web) | Escrow contract used by the browser | `trustlock-v2-timi.testnet` |
 | `NEXT_PUBLIC_USDC_CONTRACT`, `NEXT_PUBLIC_NETWORK`, `NEXT_PUBLIC_APP_MODE` | No (web) | Token, network, mode label | see `.env.example` |
-| `NEXT_PUBLIC_SITE_URL` | No (web) | Canonical URL for metadata | `https://trustlock-five.vercel.app` |
+| `NEXT_PUBLIC_SITE_URL` | No (web) | Canonical URL for metadata | `https://podlock.vercel.app/` |
 | `TRUSTLOCK_OWNER_ACCOUNT`, `…_SELLER_…`, `…_BUYER_…`, `…_RIDER_ACCOUNT`, `…_KEYFILE` | Scripts only | Account ids and **paths** to key files for `scripts/` (never the key material) | `seller-timi.testnet` |
 
 ## Claims and where to check them
