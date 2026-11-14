@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { Check, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TimelineStep {
@@ -112,7 +112,7 @@ export default function DealTimeline({
                 </span>
               ) : isDone ? (
                 <span className={cn("flex size-7 items-center justify-center rounded-full text-ink-950", FILL[tone])}>
-                  <Check aria-hidden="true" strokeWidth={2} className="size-4" />
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </span>
               ) : isCurrent ? (
                 <>

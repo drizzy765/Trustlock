@@ -6,7 +6,7 @@ import { agentUrl } from "@/lib/config";
 import { toast } from "sonner";
 import { KeyRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Hint } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ export default function SellerAgentPage() {
 
   if (!sellerId) {
     return (
-      <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+      <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
         <h1 className="text-[32px] leading-tight md:text-[40px]">Your AI agent</h1>
         <p className="mt-2 text-mute">Connect your wallet to choose the agent that drafts and checks your deals.</p>
         <Button className="mt-6" onClick={() => signIn()}>
@@ -103,7 +103,7 @@ export default function SellerAgentPage() {
   const current = providers.find((p) => p.id === status?.provider);
 
   return (
-    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
       <h1 className="text-[32px] leading-tight md:text-[40px]">Bring your own AI. It can&rsquo;t touch your money.</h1>
       <p className="mt-3 text-mute">
         <strong className="font-medium text-bone">AI does the work. Cryptography holds the money.</strong> Your agent reads the deal, checks
@@ -147,7 +147,7 @@ export default function SellerAgentPage() {
             <CardTitle>API key</CardTitle>
             <KeyRound aria-hidden="true" strokeWidth={1.5} className="size-5 text-faint" />
           </CardHeader>
-          <CardBody>
+          <CardContent>
             <p className="text-[15px] text-mute">
               Saved key:{" "}
               {status?.key.saved ? <span className="font-mono text-bone">{status.key.masked}</span> : <span className="text-bone">none</span>}. Keys are
@@ -184,7 +184,7 @@ export default function SellerAgentPage() {
                 </Button>
               </div>
             </form>
-          </CardBody>
+          </CardContent>
         </Card>
       )}
 

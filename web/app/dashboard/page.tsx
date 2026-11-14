@@ -187,7 +187,7 @@ export default function HistoryPage() {
       </header>
 
       {/* Underline tabs, synced to ?status= */}
-      <div role="tablist" aria-label="Filter by status" className="mt-8 flex gap-6 overflow-x-auto border-b border-line">
+      <div role="tablist" aria-label="Filter by status" className="mt-8 flex gap-5 overflow-x-auto border-b border-line md:gap-6">
         {TABS.map((t) => (
           <button
             key={t.id}

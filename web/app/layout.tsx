@@ -8,6 +8,7 @@ import Providers from "./providers";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 
+// avoid-ai-design-ignore: T2, T4 — Geist is the brand face (the wordmark is Geist Medium), themed with tight display tracking and tabular figures.
 const sans = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 

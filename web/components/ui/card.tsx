@@ -14,6 +14,6 @@ export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHead
   return <h2 className={cn("text-[20px] leading-tight font-medium", className)} {...props} />;
 }
 
-export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("px-5 py-5 md:px-6", className)} {...props} />;
 }

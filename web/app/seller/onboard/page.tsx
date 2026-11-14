@@ -8,7 +8,7 @@ import { agentUrl } from "@/lib/config";
 import { fetchHealth, type Mode } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Select, Label, Hint } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import ChainValue from "@/components/ChainValue";
@@ -227,7 +227,7 @@ export default function SellerOnboardPage() {
             <CardHeader>
               <CardTitle>What are you selling?</CardTitle>
             </CardHeader>
-            <CardBody>
+            <CardContent>
               <form
                 className="space-y-5"
                 onSubmit={(e) => {
@@ -353,7 +353,7 @@ export default function SellerOnboardPage() {
                 </Button>
                 <p className="text-sm text-faint">Creating a link moves no money. Testnet. No real money moves.</p>
               </form>
-            </CardBody>
+            </CardContent>
           </Card>
 
           {/* Live preview: what the buyer will see. */}
@@ -396,7 +396,7 @@ export default function SellerOnboardPage() {
               </div>
               <ModeBadge mode={mode} />
             </CardHeader>
-            <CardBody>
+            <CardContent>
               <div className="rounded-[6px] border border-line-strong bg-ink-800 px-3 py-3">
                 <ChainValue value={shareableLink} full label="payment link" />
               </div>
@@ -419,7 +419,7 @@ export default function SellerOnboardPage() {
                   </Button>
                 ) : null}
               </div>
-            </CardBody>
+            </CardContent>
           </Card>
 
           <section aria-labelledby="next-title">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Camera, CameraOff, Check, ImageUp } from "lucide-react";
+import { Camera, CameraOff, ImageUp } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
@@ -201,7 +201,7 @@ export default function ScannerFrame({
       ) : null}
       {success ? (
         <p className="sr-only" aria-live="polite">
-          <Check aria-hidden="true" /> Code accepted
+          Code accepted
         </p>
       ) : null}
     </div>

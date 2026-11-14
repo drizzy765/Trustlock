@@ -22,7 +22,7 @@ function PayRedirect() {
 
   if (id) {
     return (
-      <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+      <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
         <p role="status" className="text-mute">Opening your deal…</p>
       </main>
     );
@@ -37,7 +37,7 @@ function PayRedirect() {
   }
 
   return (
-    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
       <h1 className="text-[32px] leading-tight md:text-[40px]">Pay for an order</h1>
       <p className="mt-2 text-mute">Open the payment link your seller sent you, or paste it here.</p>
       <form

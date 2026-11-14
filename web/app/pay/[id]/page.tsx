@@ -8,7 +8,7 @@ import { fetchHealth, fetchQuote, displayMode, assetLabel, shortQuoteId, verifie
 import ModeBadge from "@/components/ModeBadge";
 import { SHA256 as sha256 } from "crypto-js";
 import { toast } from "sonner";
-import { Check, ChevronDown, Lock, PackageCheck, QrCode, Wallet } from "lucide-react";
+import { Send, ChevronDown, Lock, PackageCheck, QrCode, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
@@ -502,7 +502,7 @@ export default function PayDealPage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+      <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="mt-8 h-44 w-full rounded-[12px]" />
         <Skeleton className="mt-6 h-56 w-full rounded-[12px]" />
@@ -514,13 +514,23 @@ export default function PayDealPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-[32px] leading-tight md:text-[40px]">Deal #{onchainId ?? pageId}</h1>
         {summaryStatus ? <StatusBadge status={summaryStatus} /> : null}
         <NetworkChip />
       </header>
-      <p className="mt-2 text-mute">Review the order, then lock USDC. It&rsquo;s released only when the order arrives.</p>
+      <p className="mt-2 text-mute">
+        {deal?.status === "Funded"
+          ? "The USDC is locked in escrow until the order arrives."
+          : releasedNow
+            ? "Delivered. This deal is complete."
+            : refundedNow
+              ? "The deadline passed, so the USDC goes back to the buyer."
+              : deal?.status === "Disputed"
+                ? "This deal is under manual review."
+                : "Review the order, then lock USDC. It’s released only when the order arrives."}
+      </p>
 
       <div className="mt-6 flex min-h-11 flex-wrap items-center gap-3">
         {isConnected ? (
@@ -740,7 +750,7 @@ export default function PayDealPage() {
 
           {txHash && !releasedNow && !refundedNow ? (
             <div className="mt-6 flex flex-wrap items-center gap-2 text-sm text-faint">
-              <Check aria-hidden="true" strokeWidth={1.5} className="size-4 text-release" />
+              <Send aria-hidden="true" strokeWidth={1.5} className="size-4 text-faint" />
               <span>Transaction sent</span>
               <ChainValue value={txHash} href={getExplorerUrl(txHash)} label="transaction" />
             </div>

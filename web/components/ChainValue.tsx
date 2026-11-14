@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { CopyCheck, Copy, ExternalLink } from "lucide-react";
 import { middle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,7 @@ export default function ChainValue({
         title={value}
         translate="no"
       >
-        {full ? value : middle(value)}
+        {full || value.length <= 32 ? value : middle(value, 10, 8)}
       </span>
       <button
         type="button"
@@ -54,7 +54,7 @@ export default function ChainValue({
         aria-label={copied ? `Copied ${label ?? "value"}` : `Copy ${label ?? "value"}`}
         className="inline-flex size-8 shrink-0 items-center justify-center rounded-[6px] text-faint transition-colors duration-150 hover:bg-ink-800 hover:text-bone"
       >
-        {copied ? <Check aria-hidden="true" strokeWidth={1.5} className="size-4 text-release" /> : <Copy aria-hidden="true" strokeWidth={1.5} className="size-4" />}
+        {copied ? <CopyCheck aria-hidden="true" strokeWidth={1.5} className="size-4 text-release" /> : <Copy aria-hidden="true" strokeWidth={1.5} className="size-4" />}
       </button>
       {href ? (
         <a

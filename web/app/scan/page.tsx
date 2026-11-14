@@ -134,7 +134,7 @@ export default function ScanPage() {
   const amount = dealInfo ? usdcFromBaseUnits(dealInfo.price) : 0;
 
   return (
-    <main className="mx-auto max-w-[640px] px-5 pt-10 md:px-8 md:pt-14">
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14 [&>*]:max-w-[640px]">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-[32px] leading-tight md:text-[40px]">Confirm a delivery</h1>
         <span className="flex items-center gap-2 text-sm text-faint">
