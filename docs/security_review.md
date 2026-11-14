@@ -76,6 +76,9 @@ browser with a cryptographic RNG and never sending it to the seller. Also requir
 account as rider; that is the accepted collusion case of the threat model), and add `qr_hash` to
 `DealView` (L-2) so the web app can show the match.
 
+Left open deliberately for the hackathon: the fix changes the onboarding flow (the buyer's
+browser must generate the QR secret), which is a product change, not a #58 bug fix.
+
 ### H-2: a dispute locks the funds forever — FIXED in #58
 
 `open_dispute` moves a `Funded` or `Delivered` deal to `Disputed` (line 299). No method leaves
@@ -142,9 +145,6 @@ Residual, accepted: a dispute opened mid-flight that is followed by a *successfu
 still resolves to the completed payout (the `Disputed` flag is superseded, not preserved).
 `open_dispute` during flight was deliberately *not* blocked — blocking it would need new
 in-flight tracking, and a failed transfer already restores the pre-call status either way.
-
-Left open deliberately for the hackathon: the fix changes the onboarding flow (the buyer's
-browser must generate the QR secret), which is a product change, not a #58 bug fix.
 
 ### M-4: unpaid storage — OPEN known limitation
 
