@@ -26,7 +26,7 @@ export default function SiteFooter() {
           <ChainValue value={contractId} href={explorerAccountUrl(contractId)} label="contract id" />
         </div>
         <p className="mt-4 max-w-[720px] text-sm text-faint">
-          Built on NEAR testnet with testnet USDC, MyNearWallet, and a NEAR Intents 1Click dry quote.{" "}
+          Built on NEAR testnet with testnet USDC, Meteor Wallet, and a NEAR Intents 1Click dry quote.{" "}
           <span className="text-mute">Testnet. No real money moves.</span>
         </p>
         <p className="mt-4 text-sm text-faint">
