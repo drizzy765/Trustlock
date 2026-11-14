@@ -1,6 +1,6 @@
 # Phase 2 Status — TrustLock Contract Development
 
-**Team:** Agoro Oluwatimilehin (Timi), Brayan Sorgho, Mikezx8  
+**Team:** Agoro Oluwatimilehin (Timi), Brayan Sorgho, Ajiboye Toluwalase  
 **Phase:** 2 — Contract Development  
 **Status:** ✅ COMPLETE - All tasks finished, CI/CD ready
 

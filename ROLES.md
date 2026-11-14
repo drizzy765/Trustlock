@@ -23,14 +23,13 @@ Role: deal agent lead (`agent/`).
 - Agent tests for the features above.
 - Stretch: mobile-money context (#15), SMS / USSD-style fallback copy (#16), Swahili and French targets (#19).
 
-## Mikezx8, [@Mikezx8](https://github.com/Mikezx8)
+## Ajiboye Toluwalase, [@metrosmash](https://github.com/metrosmash)
 
-Role: security lead.
+Role: NEAR Intents / 1Click.
 
-- Security review of the contract and threat model, with findings in `docs/security_review.md` (#21).
-- Rider function-call access key script (#7) and tests proving the key can only call `confirm_delivery` (#6).
-- Agent safety battery A01–A06 with logged pass/fail results (#3).
-- Required reviewer on any PR touching the contract, keys or funds flow.
+- Real 1Click dry quotes with signature verification (#45).
+- Quote deadline enforcement (#47).
+- Mobile-money context in the docs, with no live rail claimed (#48).
 
 ## Shared rules
 

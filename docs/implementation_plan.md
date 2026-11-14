@@ -3,7 +3,7 @@
 Deadline: **14 November 2026, 23:59 UTC** (15 November 00:59 WAT). Judging 16–18 November.  
 Tracks: `realworld`, `business`.
 
-This is a team project by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Mikezx8 (see README, Team and responsibilities).
+This is a team project by Agoro Oluwatimilehin (Timi), Brayan Sorgho and Ajiboye Toluwalase (see README, Team and responsibilities).
 
 ## micro1 first (5–7 November)
 

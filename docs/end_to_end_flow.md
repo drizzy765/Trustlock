@@ -108,7 +108,7 @@ stateDiagram-v2
 | Area | Built | Planned / gap |
 |---|---|---|
 | Contract: create and fund | `create_deal`, `ft_on_transfer` (token and exact-amount checks) | Make `buyer` optional and bind the payer at funding; only the seller can create their own deals; the buyer supplies the QR hash at funding so the seller never knows the preimage |
-| Contract: release | `confirm_delivery` (rider-only, QR hash, replay protection, deadline) + `on_payout` | **`confirm_receipt(deal_id)`, a buyer one-tap release** (new issue, Mikezx8 reviews) |
+| Contract: release | `confirm_delivery` (rider-only, QR hash, replay protection, deadline) + `on_payout` | **`confirm_receipt(deal_id)`, a buyer one-tap release** (new issue) |
 | Contract: refund | `claim_timeout_refund_for` + `on_refund` | Retry path: if the refund transfer fails, the deal stays `Expired`, but the claim requires `Funded`, so it can't be retried |
 | Contract: disputes | `open_dispute` → Disputed | `resolve_dispute` (owner or multisig, manual v1). Without it, disputed funds are stuck |
 | Contract: tests and deploy | Unit tests for status strings | near-workspaces integration tests (#5, #6); testnet deploy (#10) |
