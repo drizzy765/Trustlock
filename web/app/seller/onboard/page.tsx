@@ -1,23 +1,59 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { toast } from "sonner";
+import { Copy, Link2, MessageCircle, Plus, Share2, Store, Wallet } from "lucide-react";
 import { initNear, getAccountId, signIn } from "@/lib/near";
 import { agentUrl } from "@/lib/config";
 import { fetchHealth, type Mode } from "@/lib/quote";
 import ModeBadge from "@/components/ModeBadge";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input, Select, Label, Hint } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import ChainValue from "@/components/ChainValue";
+import AmountDisplay from "@/components/AmountDisplay";
+import StatusBadge from "@/components/StatusBadge";
+import LockMark from "@/components/LockMark";
+import DealTimeline, { stepsForStatus } from "@/components/DealTimeline";
+import NetworkChip from "@/components/NetworkChip";
+import { formatUsdc } from "@/lib/format";
+import {
+  CURRENCIES,
+  formatLocal,
+  formatUpdated,
+  isLocalCurrency,
+  loadRates,
+  toUsdc,
+  type Currency,
+  type FxRates,
+} from "@/lib/fx";
 
 interface DraftResult {
   draftId: number;
   item: string;
-  priceNgn: number;
+  priceUsdc: number;
+  localLabel: string | null;
+}
+
+/**
+ * Escrow is USDC only. The seller may type a local price; the browser converts it to USDC and
+ * the USDC amount is what the draft stores and the buyer locks. The draft's integer price field
+ * (named price_ngn by the agent API) is USDC × 1000, the same scale the pay page and the agent
+ * already use (price × 1000 = USDC base units).
+ */
+function draftPriceFromUsdc(usdc: number): number {
+  return Math.round(usdc * 1000);
 }
 
 export default function SellerOnboardPage() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [item, setItem] = useState("");
-  const [priceNgn, setPriceNgn] = useState("");
+  const [priceInput, setPriceInput] = useState("");
+  const [currency, setCurrency] = useState<Currency>("USDC");
+  const [fx, setFx] = useState<FxRates | null>(null);
+  const [fxError, setFxError] = useState(false);
   const [buyerAccount, setBuyerAccount] = useState("");
   const [riderAccount, setRiderAccount] = useState("");
   const [deadlineHours, setDeadlineHours] = useState("24");
@@ -26,6 +62,9 @@ export default function SellerOnboardPage() {
   const [createdDraft, setCreatedDraft] = useState<DraftResult | null>(null);
   const [shareableLink, setShareableLink] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => setCanShare(typeof navigator.share === "function"), []);
 
   useEffect(() => {
     initNear().then(() => {
@@ -37,16 +76,46 @@ export default function SellerOnboardPage() {
     });
   }, []);
 
+  // Rates are needed only for a local currency. If both sources fail, local input is disabled.
+  useEffect(() => {
+    if (currency === "USDC" || fx) return;
+    let alive = true;
+    loadRates()
+      .then((r) => alive && (setFx(r), setFxError(false)))
+      .catch(() => {
+        if (!alive) return;
+        setFxError(true);
+        setCurrency("USDC");
+        toast.error("Exchange rates are unavailable right now. Enter the price in USDC.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [currency, fx]);
+
+  const amountNumber = Number(priceInput);
+  const localCurrency = isLocalCurrency(currency) ? currency : null;
+  const priceUsdc =
+    !Number.isFinite(amountNumber) || amountNumber <= 0
+      ? 0
+      : localCurrency
+        ? fx
+          ? toUsdc(amountNumber, localCurrency, fx)
+          : 0
+        : Math.floor(amountNumber * 1000) / 1000;
+  const localLabel = localCurrency && amountNumber > 0 ? formatLocal(amountNumber, localCurrency) : null;
+  const ratesPending = Boolean(localCurrency && !fx);
+
   async function handleConnect() {
     await signIn();
   }
 
   async function handleCreateDraft() {
     // A draft is unsigned and moves no money, so it is allowed in every mode.
-    if (!item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || !accountId) return;
-    const price = parseInt(priceNgn, 10);
+    if (!item.trim() || !priceInput || !buyerAccount.trim() || !riderAccount.trim() || !accountId) return;
+    const price = draftPriceFromUsdc(priceUsdc);
     if (!Number.isInteger(price) || price <= 0) {
-      setError("Enter a valid price in NGN.");
+      setError(localCurrency ? "That price converts to less than 0.001 USDC. Enter a larger amount." : "Enter a price in USDC, for example 12.50.");
       return;
     }
 
@@ -73,9 +142,12 @@ export default function SellerOnboardPage() {
         throw new Error("Agent did not return a draft id.");
       }
       // No money moves here. The buyer locks funds on the pay page.
+      // The local price rides in the link for display only; the draft holds the USDC amount.
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      setShareableLink(`${baseUrl}/pay/${data.deal_id}`);
-      setCreatedDraft({ draftId: data.deal_id, item: item.trim(), priceNgn: price });
+      const q = localCurrency ? `?cur=${localCurrency}&amt=${encodeURIComponent(String(amountNumber))}` : "";
+      setShareableLink(`${baseUrl}/pay/${data.deal_id}${q}`);
+      setCreatedDraft({ draftId: data.deal_id, item: item.trim(), priceUsdc: price / 1000, localLabel });
+      toast("Payment link ready", { description: "Share it with your buyer in any chat." });
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to create draft. Is the agent running at ${agentUrl}?`);
     } finally {
@@ -83,365 +155,310 @@ export default function SellerOnboardPage() {
     }
   }
 
+  function shareText() {
+    const local = createdDraft?.localLabel ? ` (≈ ${createdDraft.localLabel})` : "";
+    return `Pay for ${createdDraft?.item}: ${formatUsdc(createdDraft?.priceUsdc ?? 0)} USDC${local}, locked until delivery.\n\n${shareableLink}`;
+  }
+
   async function shareToWhatsApp() {
-    const text = `Pay for ${createdDraft?.item} - ₦${createdDraft?.priceNgn}\n\n${shareableLink}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText())}`;
     window.open(whatsappUrl, "_blank");
   }
 
   async function shareToInstagram() {
     // Instagram doesn't have a direct share URL, copy to clipboard
     await navigator.clipboard.writeText(shareableLink);
-    alert("Link copied to clipboard! Paste in Instagram DM.");
+    toast("Link copied", { description: "Paste it in your Instagram DM." });
+  }
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(shareableLink);
+    toast("Link copied");
+  }
+
+  async function nativeShare() {
+    try {
+      await navigator.share({ title: "TrustLock payment link", text: shareText(), url: shareableLink });
+    } catch {
+      /* share sheet dismissed */
+    }
   }
 
   const isConnected = !!accountId;
+  const created = stepsForStatus("Created");
+  const formReady = isConnected && item.trim() && priceUsdc > 0 && buyerAccount.trim() && riderAccount.trim();
 
   return (
-    <main style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ margin: 0 }}>Seller — Create Deal</h1>
-        <Link href="/" style={{ color: "#3b82f6", textDecoration: "none" }}>
-          ← Back to Home
-        </Link>
-      </div>
+    <main className="mx-auto max-w-[1200px] px-5 pt-10 md:px-8 md:pt-14">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-[32px] leading-tight md:text-[40px]">Create a payment link</h1>
+        {/* App mode label. Read-only: no one can select live from a dropdown. */}
+        <span className="flex items-center gap-2 text-sm text-faint">
+          App mode <ModeBadge mode={mode} />
+        </span>
+      </header>
+      <p className="mt-2 max-w-[640px] text-mute">
+        Describe the order and who&rsquo;s involved. Your buyer gets a link, locks USDC, and the rider&rsquo;s scan at the door pays you.
+      </p>
 
-      {/* App mode label. Read-only: no one can select live from a dropdown. */}
-      <div style={{ marginBottom: 24, display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-        <span style={{ fontSize: 12, color: "#888" }}>App mode:</span>
-        <ModeBadge mode={mode} />
-      </div>
-
-      {/* Wallet Connection */}
-      <div style={{
-        background: "#1a1a1a",
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 24,
-        border: "1px solid #333"
-      }}>
+      <div className="mt-6 flex min-h-11 flex-wrap items-center gap-3">
         {isLoading ? (
-          <p>Loading wallet...</p>
+          <p role="status" className="text-mute">
+            Checking your wallet…
+          </p>
         ) : isConnected ? (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Seller Account: <strong>{accountId}</strong></span>
-            <span style={{
-              background: "#22c55e",
-              color: "#000",
-              padding: "4px 8px",
-              borderRadius: 4,
-              fontSize: 12,
-              fontWeight: "bold"
-            }}>
-              testnet
-            </span>
-          </div>
+          <p className="flex min-w-0 items-center gap-2 text-[15px] text-mute">
+            <Store aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 text-faint" />
+            Selling as <ChainValue value={accountId as string} label="your account" />
+            <NetworkChip />
+          </p>
         ) : (
-          <button
-            onClick={handleConnect}
-            style={{
-              background: "#22c55e",
-              color: "#000",
-              border: "none",
-              padding: "12px 24px",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: 14,
-              width: "100%"
-            }}
-          >
-            Connect Seller Wallet
-          </button>
+          <Button variant="secondary" onClick={handleConnect}>
+            <Wallet aria-hidden="true" strokeWidth={1.5} />
+            Connect seller wallet
+          </Button>
         )}
       </div>
 
       {!createdDraft ? (
-        /* Draft Creation Form — unsigned. No funds move, no QR secret is made here. */
-        <div style={{ background: "#1a1a1a", padding: 24, borderRadius: 8, border: "1px solid #333" }}>
-          <h3 style={{ marginTop: 0 }}>What are you selling?</h3>
+        <div className="mt-8 grid gap-8 lg:grid-cols-12">
+          {/* Draft form: unsigned. No funds move and no delivery code is made here. */}
+          <Card className="lg:col-span-7">
+            <CardHeader>
+              <CardTitle>What are you selling?</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <form
+                className="space-y-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleCreateDraft();
+                }}
+              >
+                <div>
+                  <Label htmlFor="ob-item">Item</Label>
+                  <Input id="ob-item" name="item" autoComplete="off" value={item} onChange={(e) => setItem(e.target.value)} placeholder="Black leather sandals, size 40" />
+                </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ob-item" style={{ display: "block", marginBottom: 8, fontSize: 14 }}>Item Name *</label>
-            <input
-              id="ob-item"
-              type="text"
-              value={item}
-              onChange={(e) => setItem(e.target.value)}
-              placeholder="e.g., Black Sandals"
-              style={{
-                width: "100%",
-                padding: 12,
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #333",
-                borderRadius: 6,
-                fontSize: 14
-              }}
-            />
-          </div>
+                <div>
+                  <Label htmlFor="ob-price">Price</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="ob-price"
+                      name="price"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      className="font-mono tabular"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder={localCurrency ? "18000" : "12.50"}
+                      aria-describedby="ob-price-hint"
+                    />
+                    <Select
+                      aria-label="Currency"
+                      className="w-[112px] shrink-0"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value as Currency)}
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c.code} value={c.code} disabled={c.code !== "USDC" && fxError}>
+                          {c.code}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div id="ob-price-hint" aria-live="polite">
+                    {localCurrency ? (
+                      ratesPending ? (
+                        <Hint>Loading exchange rates…</Hint>
+                      ) : fx ? (
+                        <>
+                          <p className="mt-2 text-[15px] text-bone">
+                            Buyer locks <span className="font-mono tabular">{formatUsdc(priceUsdc)} USDC</span>
+                          </p>
+                          <Hint className="mt-1">
+                            Rate from{" "}
+                            <a href={fx.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-bone">
+                              {fx.source}
+                            </a>
+                            , updated {formatUpdated(fx.updatedAt)}. Escrow holds USDC, not {localCurrency}.
+                          </Hint>
+                        </>
+                      ) : null
+                    ) : (
+                      <Hint>
+                        Escrow holds USDC (testnet).{fxError ? " Exchange rates are unavailable, so local currencies are off for now." : " Pick a local currency to price in it instead."}
+                      </Hint>
+                    )}
+                  </div>
+                </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ob-price" style={{ display: "block", marginBottom: 8, fontSize: 14 }}>Price (₦ NGN) *</label>
-            <input
-              id="ob-price"
-              type="number"
-              value={priceNgn}
-              onChange={(e) => setPriceNgn(e.target.value)}
-              placeholder="e.g., 2500"
-              style={{
-                width: "100%",
-                padding: 12,
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #333",
-                borderRadius: 6,
-                fontSize: 14
-              }}
-            />
-            <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0 0" }}>
-              ≈ {(parseInt(priceNgn || "0", 10) / 1000).toFixed(2)} USDC
-            </p>
-          </div>
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="ob-buyer">Buyer&rsquo;s NEAR account</Label>
+                    <Input
+                      id="ob-buyer"
+                      name="buyer"
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      className="font-mono"
+                      value={buyerAccount}
+                      onChange={(e) => setBuyerAccount(e.target.value)}
+                      placeholder="buyer-name.testnet"
+                    />
+                    <Hint>Only this account can lock funds for the deal.</Hint>
+                  </div>
+                  <div>
+                    <Label htmlFor="ob-rider">Rider&rsquo;s NEAR account</Label>
+                    <Input
+                      id="ob-rider"
+                      name="rider"
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      className="font-mono"
+                      value={riderAccount}
+                      onChange={(e) => setRiderAccount(e.target.value)}
+                      placeholder="rider-name.testnet"
+                    />
+                    <Hint>The rider scans the delivery code at the door.</Hint>
+                  </div>
+                </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ob-buyer" style={{ display: "block", marginBottom: 8, fontSize: 14 }}>Buyer Account *</label>
-            <input
-              id="ob-buyer"
-              type="text"
-              value={buyerAccount}
-              onChange={(e) => setBuyerAccount(e.target.value)}
-              placeholder="e.g., buyer-name.testnet"
-              style={{
-                width: "100%",
-                padding: 12,
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #333",
-                borderRadius: 6,
-                fontSize: 14
-              }}
-            />
-            <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0 0" }}>
-              The buyer&apos;s NEAR account — only that account can lock funds for this deal.
-            </p>
-          </div>
+                <div>
+                  <Label htmlFor="ob-deadline">Delivery deadline</Label>
+                  <Select id="ob-deadline" value={deadlineHours} onChange={(e) => setDeadlineHours(e.target.value)}>
+                    <option value="24">24 hours</option>
+                    <option value="48">48 hours</option>
+                    <option value="72">72 hours</option>
+                    <option value="168">1 week</option>
+                  </Select>
+                  <Hint>If the rider hasn&rsquo;t scanned by then, the buyer can get a refund.</Hint>
+                </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ob-rider" style={{ display: "block", marginBottom: 8, fontSize: 14 }}>Rider Account *</label>
-            <input
-              id="ob-rider"
-              type="text"
-              value={riderAccount}
-              onChange={(e) => setRiderAccount(e.target.value)}
-              placeholder="e.g., rider-name.testnet"
-              style={{
-                width: "100%",
-                padding: 12,
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #333",
-                borderRadius: 6,
-                fontSize: 14
-              }}
-            />
-            <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0 0" }}>
-              The rider who will scan the delivery code
-            </p>
-          </div>
+                {error ? <Alert title="The link wasn’t created">{error}</Alert> : null}
 
-          <div style={{ marginBottom: 24 }}>
-            <label htmlFor="ob-deadline" style={{ display: "block", marginBottom: 8, fontSize: 14 }}>Delivery Deadline</label>
-            <select
-              id="ob-deadline"
-              value={deadlineHours}
-              onChange={(e) => setDeadlineHours(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #333",
-                borderRadius: 6,
-                fontSize: 14
-              }}
-            >
-              <option value="24">24 hours</option>
-              <option value="48">48 hours</option>
-              <option value="72">72 hours</option>
-              <option value="168">1 week</option>
-            </select>
-          </div>
+                <Button type="submit" block size="lg" disabled={!formReady} loading={isCreating}>
+                  {!isConnected ? (
+                    "Connect your wallet first"
+                  ) : isCreating ? (
+                    "Creating the link…"
+                  ) : (
+                    <>
+                      <Link2 aria-hidden="true" strokeWidth={1.5} />
+                      Create payment link
+                    </>
+                  )}
+                </Button>
+                <p className="text-sm text-faint">Creating a link moves no money. Testnet. No real money moves.</p>
+              </form>
+            </CardBody>
+          </Card>
 
-          {error && (
-            <p role="alert" style={{ color: "#ef4444", fontSize: 14 }}>{error}</p>
-          )}
-
-          <button
-            disabled={!isConnected || !item.trim() || !priceNgn || !buyerAccount.trim() || !riderAccount.trim() || isCreating}
-            onClick={handleCreateDraft}
-            style={{
-              width: "100%",
-              background: !isConnected ? "#444" : "#22c55e",
-              color: "#fff",
-              border: "none",
-              padding: "14px 24px",
-              borderRadius: 6,
-              cursor: !isConnected || isCreating ? "not-allowed" : "pointer",
-              fontWeight: "bold",
-              fontSize: 16
-            }}
-          >
-            {!isConnected
-              ? "Connect Wallet First"
-              : isCreating
-                ? "Creating draft..."
-                : "Create Draft & Generate Payment Link"
-            }
-          </button>
+          {/* Live preview: what the buyer will see. */}
+          <aside aria-label="Deal preview" className="lg:col-span-5">
+            <div className="lg:sticky lg:top-24">
+              <p className="text-sm text-faint">Your buyer sees</p>
+              <Card className="mt-2 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[20px] font-medium break-words">{item.trim() || "Your item"}</p>
+                    <StatusBadge status="Created" className="mt-2" />
+                  </div>
+                  <LockMark state="created" size={44} />
+                </div>
+                <AmountDisplay className="mt-5" amount={priceUsdc} local={localLabel} />
+                <dl className="mt-5 grid grid-cols-[72px_1fr] gap-x-4 gap-y-2 border-t border-line pt-4 text-[15px]">
+                  <dt className="text-faint">Buyer</dt>
+                  <dd className="truncate font-mono text-[14px] text-bone">{buyerAccount.trim() || "Not set"}</dd>
+                  <dt className="text-faint">Rider</dt>
+                  <dd className="truncate font-mono text-[14px] text-bone">{riderAccount.trim() || "Not set"}</dd>
+                  <dt className="text-faint">Deadline</dt>
+                  <dd className="text-bone">{deadlineHours === "168" ? "1 week" : `${deadlineHours} hours`} after locking</dd>
+                </dl>
+              </Card>
+              <DealTimeline className="mt-6" steps={created.steps} current={created.current} tone={created.tone} />
+            </div>
+          </aside>
         </div>
       ) : (
-        /* Shareable Link Generated */
-        <div>
-          <div style={{
-            background: "#064e3b",
-            padding: 16,
-            borderRadius: 8,
-            marginBottom: 24,
-            border: "1px solid #22c55e"
-          }}>
-            <h4 style={{ marginTop: 0, color: "#22c55e" }}>✅ Draft Ready!</h4>
-            <p><strong>{createdDraft.item}</strong> — ₦{createdDraft.priceNgn.toLocaleString()}</p>
-            <p style={{ fontSize: 12, margin: "8px 0 0 0" }}>
-              Draft ID: <strong>#{createdDraft.draftId}</strong> (unsigned — no funds moved yet)
-            </p>
-          </div>
+        /* Shareable link generated */
+        <div className="mt-8 max-w-[640px] space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle>Share this link with your buyer</CardTitle>
+                <p className="mt-1 text-[15px] text-mute">
+                  {createdDraft.item}, <span className="font-mono tabular text-bone">{formatUsdc(createdDraft.priceUsdc)} USDC</span>
+                  {createdDraft.localLabel ? <span> (≈ {createdDraft.localLabel})</span> : null}. Draft #{createdDraft.draftId}, unsigned, no funds moved yet.
+                </p>
+              </div>
+              <ModeBadge mode={mode} />
+            </CardHeader>
+            <CardBody>
+              <div className="rounded-[6px] border border-line-strong bg-ink-800 px-3 py-3">
+                <ChainValue value={shareableLink} full label="payment link" />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={copyLink}>
+                  <Copy aria-hidden="true" strokeWidth={1.5} />
+                  Copy link
+                </Button>
+                <Button variant="secondary" onClick={shareToWhatsApp}>
+                  <MessageCircle aria-hidden="true" strokeWidth={1.5} />
+                  WhatsApp
+                </Button>
+                <Button variant="secondary" onClick={shareToInstagram}>
+                  Instagram
+                </Button>
+                {canShare ? (
+                  <Button variant="secondary" onClick={nativeShare}>
+                    <Share2 aria-hidden="true" strokeWidth={1.5} />
+                    More apps
+                  </Button>
+                ) : null}
+              </div>
+            </CardBody>
+          </Card>
 
-          <div style={{
-            background: "#1a1a1a",
-            padding: 24,
-            borderRadius: 8,
-            marginBottom: 24,
-            border: "1px solid #333",
-            textAlign: "center"
-          }}>
-            <h3 style={{ marginTop: 0 }}>Share this link with your buyer</h3>
+          <section aria-labelledby="next-title">
+            <h2 id="next-title" className="text-[20px]">
+              What happens next
+            </h2>
+            <DealTimeline
+              className="mt-4"
+              numbered
+              steps={[
+                { title: "Your buyer opens the link", detail: "In WhatsApp, Instagram or any chat." },
+                { title: "The buyer locks USDC", detail: "It sits in escrow on NEAR. You can see it but not spend it yet." },
+                { title: "Your rider delivers and scans", detail: "The buyer shows a one-time delivery code at the door." },
+                { title: "You get paid", detail: "The scan releases the USDC to your account." },
+              ]}
+            />
+          </section>
 
-            <div style={{
-              background: "#111",
-              padding: 12,
-              borderRadius: 6,
-              marginBottom: 16,
-              wordBreak: "break-all",
-              fontSize: 14,
-              fontFamily: "monospace"
-            }}>
-              {shareableLink}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-              <button
-                onClick={() => navigator.clipboard.writeText(shareableLink)}
-                style={{
-                  background: "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 20px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                📋 Copy Link
-              </button>
-              <button
-                onClick={shareToWhatsApp}
-                style={{
-                  background: "#22c55e",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 20px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                WhatsApp
-              </button>
-              <button
-                onClick={shareToInstagram}
-                style={{
-                  background: "#ec4899",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 20px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                Instagram
-              </button>
-            </div>
-          </div>
-
-          <div style={{
-            background: "#1a1a1a",
-            padding: 16,
-            borderRadius: 8,
-            border: "1px solid #333",
-            fontSize: 14
-          }}>
-            <h4 style={{ marginTop: 0 }}>What happens next?</h4>
-            <ol style={{ margin: 0, paddingLeft: 20, color: "#888" }}>
-              <li style={{ marginBottom: 8 }}>Share the link with your buyer via WhatsApp/Instagram</li>
-              <li style={{ marginBottom: 8 }}>Buyer clicks link and locks USDC in escrow</li>
-              <li style={{ marginBottom: 8 }}>Buyer shows the rider a one-time delivery code</li>
-              <li style={{ marginBottom: 8 }}>You deliver the item via rider</li>
-              <li>Rider scans the code → You get paid instantly</li>
-            </ol>
-          </div>
-
-          <div style={{ marginTop: 24, textAlign: "center" }}>
-            <button
-              onClick={() => {
-                setCreatedDraft(null);
-                setShareableLink("");
-                setError(null);
-                setItem("");
-                setPriceNgn("");
-                setBuyerAccount("");
-                setRiderAccount("");
-              }}
-              style={{
-                background: "transparent",
-                color: "#3b82f6",
-                border: "1px solid #3b82f6",
-                padding: "10px 20px",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontWeight: "bold"
-              }}
-            >
-              Create Another Deal →
-            </button>
-          </div>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setCreatedDraft(null);
+              setShareableLink("");
+              setError(null);
+              setItem("");
+              setPriceInput("");
+              setBuyerAccount("");
+              setRiderAccount("");
+            }}
+          >
+            <Plus aria-hidden="true" strokeWidth={1.5} />
+            Create another link
+          </Button>
         </div>
       )}
 
-      {/* Info */}
-      <div style={{
-        marginTop: 32,
-        padding: 16,
-        background: "#1a1a1a",
-        borderRadius: 8,
-        border: "1px solid #333",
-        fontSize: 12,
-        color: "#888"
-      }}>
-        <strong>TrustLock</strong> — Pay on delivery for African social commerce.
-        The rider scan releases funds, not an AI opinion.
-      </div>
+      <p className="mt-12 max-w-[640px] text-sm text-faint">
+        The rider&rsquo;s scan releases funds, not an AI opinion. The AI agent can draft and check deals; it can&rsquo;t move money.
+      </p>
     </main>
   );
 }
