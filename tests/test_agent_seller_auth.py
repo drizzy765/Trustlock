@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -85,12 +86,29 @@ def test_proof_for_one_seller_does_not_work_for_another(monkeypatch):
     assert response.status_code == 401 and "another seller" in response.json()["message"]
 
 
+def test_proof_for_one_action_does_not_work_for_another():
+    response = send("DELETE", f"/sellers/{SELLER}/agent/key", None, OWNER.header(SELLER, "set_provider"))
+    assert response.status_code == 401
+
+
 def test_replayed_proof_is_rejected():
     headers = OWNER.header(SELLER, "set_provider")
     first = send("PUT", f"/sellers/{SELLER}/agent", {"provider": "builtin"}, headers)
     again = send("PUT", f"/sellers/{SELLER}/agent", {"provider": "builtin"}, headers)
     assert first.status_code == 200
     assert again.status_code == 401 and again.json()["error"] == "ERR_AUTH_REPLAY"
+
+
+def test_old_proof_is_rejected():
+    stale = int(time.time() * 1000) - 6 * 60 * 1000
+    response = send("PUT", f"/sellers/{SELLER}/agent", {"provider": "builtin"}, OWNER.header(SELLER, "set_provider", timestamp=stale))
+    assert response.status_code == 401 and response.json()["error"] == "ERR_AUTH_EXPIRED"
+
+
+def test_future_proof_is_rejected():
+    future = int(time.time() * 1000) + 10 * 60 * 1000
+    response = send("PUT", f"/sellers/{SELLER}/agent", {"provider": "builtin"}, OWNER.header(SELLER, "set_provider", timestamp=future))
+    assert response.status_code == 401
 
 
 def test_wrong_recipient_is_rejected():

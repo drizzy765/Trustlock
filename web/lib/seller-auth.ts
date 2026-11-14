@@ -6,10 +6,8 @@ export const SELLER_AUTH_RECIPIENT = "trustlock-agent";
 /** Header the seller pages attach to agent calls. Never rename it. */
 export const SELLER_AUTH_HEADER = "X-TrustLock-Auth";
 
-/** The exact sentence the seller signs. The agent checks it byte for byte. */
-export function sellerAuthMessage(accountId: string): string {
-  return `TrustLock seller auth:${accountId}`;
-}
+/** The seller write this signature authorizes. Bound into the signed message. */
+export type SellerAction = "set_provider" | "set_key" | "delete_key" | "test" | "ask";
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -19,6 +17,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 export interface SellerAuthEnvelope {
   account_id: string;
+  /** JSON {"action","seller_id","timestamp"} (timestamp = Date.now() ms). Expires after 5 minutes. */
   message: string;
   /** 32 fresh random bytes, base64. */
   nonce: string;
@@ -33,7 +32,10 @@ export interface SellerAuthEnvelope {
  * the value for the X-TrustLock-Auth header. No local keys are used: the
  * wallet holds the only key, and the signature never leaves this envelope.
  */
-export async function sellerAuthHeader(accountId: string): Promise<Record<string, string>> {
+export async function sellerAuthHeader(
+  accountId: string,
+  action: SellerAction
+): Promise<Record<string, string>> {
   const wallet = await getActiveWallet();
   if (!wallet) throw new Error("Connect a wallet first");
   if (typeof wallet.signMessage !== "function") {
@@ -46,9 +48,10 @@ export async function sellerAuthHeader(accountId: string): Promise<Record<string
     throw new Error("Connect the seller wallet first");
   }
 
+  const message = JSON.stringify({ action, seller_id: account, timestamp: Date.now() });
   const nonce = crypto.getRandomValues(new Uint8Array(32));
   const signed = await wallet.signMessage({
-    message: sellerAuthMessage(account),
+    message,
     recipient: SELLER_AUTH_RECIPIENT,
     nonce: nonce as Buffer,
   });
@@ -56,7 +59,7 @@ export async function sellerAuthHeader(accountId: string): Promise<Record<string
 
   const envelope: SellerAuthEnvelope = {
     account_id: signed.accountId || account,
-    message: sellerAuthMessage(account),
+    message,
     nonce: bytesToBase64(nonce),
     recipient: SELLER_AUTH_RECIPIENT,
     public_key: signed.publicKey,
