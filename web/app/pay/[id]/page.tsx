@@ -216,6 +216,19 @@ export default function PayDealPage() {
     }
     setError(null);
     try {
+      // History links use /pay/<on-chain id>?onchain=1 so a draft with the same numeric
+      // id cannot shadow the on-chain deal. Draft links (/pay/<draft id>) are unchanged.
+      const forceOnchain = new URLSearchParams(window.location.search).get("onchain") === "1";
+      if (forceOnchain) {
+        const onchainData = await getDeal(draftId);
+        if (!onchainData) {
+          throw new Error("Deal not found. The link may be invalid.");
+        }
+        setLegacy(true);
+        setDeal(onchainData as OnchainDeal);
+        setOnchainId(draftId);
+        return;
+      }
       const res = await fetch(`${agentUrl}/deals/${draftId}`);
       if (res.status === 404) {
         // Legacy link: /pay?id=<onchain id> shared before drafts existed.

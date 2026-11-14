@@ -95,8 +95,8 @@ export async function createDeal(
   if (!contract) await initNear();
   return contract.create_deal(
     { seller, rider, buyer, item, price, deadline_ms: deadlineMs, qr_hash_hex: qrHashHex },
-    "300000000000000", // 0.3 NEAR for gas + storage
-    "100000000000000000000000" // 0.1 NEAR deposit
+    "300000000000000", // 300 Tgas
+    "0" // not #[payable]; a deposit panics. Zero also lets the function-call access key sign without a wallet redirect.
   );
 }
 

@@ -93,10 +93,13 @@ export default function ScanPage() {
         userMessage = "Only the assigned rider can confirm this delivery.";
       } else if (errorMessage.includes("ERR_ALREADY_RELEASED")) {
         userMessage = "Funds were already released for this deal.";
-      } else if (errorMessage.includes("ERR_DEADLINE")) {
+      } else if (errorMessage.includes("ERR_BAD_QR")) {
+        userMessage = "That code doesn't match this deal";
+      } else if (errorMessage.includes("ERR_NOT_EXPIRED")) {
+        // confirm_delivery panics with ERR_NOT_EXPIRED when now > deadline_ms (not ERR_DEADLINE).
         userMessage = "The deal deadline has passed.";
       } else if (errorMessage.includes("ERR_BAD_STATUS")) {
-        userMessage = "This deal isn’t locked (Funded), so there’s nothing to release.";
+        userMessage = "Already delivered or not funded";
       }
       
       setResult({
