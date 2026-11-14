@@ -60,6 +60,18 @@ async fn s14_admin_dispute_resolution() -> anyhow::Result<()> {
     assert_eq!(get_deal(&escrow, deal_1).await?.status, "Released");
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, price);
 
+    // A second resolve on the settled deal is rejected: no double payout.
+    let double = resolve_dispute(&escrow, owner, deal_1, "release").await?;
+    assert!(double.is_failure(), "Second resolve must fail");
+    let error = format!("{:?}", double.into_result().unwrap_err());
+    assert!(
+        error.contains("ERR_BAD_STATUS"),
+        "Expected ERR_BAD_STATUS, got: {}",
+        error
+    );
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, price);
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
+
     // Deal 2: arbiter resolves with a refund to the payer.
     let (_, qr2) = qr_pair("s14b");
     let deal_2 = create_test_deal(
@@ -167,6 +179,55 @@ async fn s14_admin_dispute_resolution() -> anyhow::Result<()> {
         "Expected ERR_BAD_STATUS, got: {}",
         error
     );
+
+    // Failed resolve transfer restores Disputed, then retry succeeds.
+    let (_, qr5) = qr_pair("s14e");
+    let deal_5 = create_test_deal(
+        &escrow,
+        &seller,
+        rider.id(),
+        buyer.id(),
+        price,
+        now_ms_plus(3_600_000),
+        &qr5,
+    )
+    .await?;
+    fund_deal(&ft, &buyer, escrow.id(), deal_5, price)
+        .await?
+        .into_result()?;
+    open_dispute(&escrow, &buyer, deal_5, "damaged item")
+        .await?
+        .into_result()?;
+
+    ft_owner
+        .call(ft.id(), "set_fail_next_transfer")
+        .args_json(serde_json::json!({"fail": true}))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+    resolve_dispute(&escrow, owner, deal_5, "release")
+        .await?
+        .into_result()?;
+    // Transfer failed: back to Disputed, seller unpaid, escrow holds funds.
+    assert_eq!(get_deal(&escrow, deal_5).await?.status, "Disputed");
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, 2 * price);
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, price);
+
+    // Re-arm the token and resolve again: Released, paid exactly once more.
+    ft_owner
+        .call(ft.id(), "set_fail_next_transfer")
+        .args_json(serde_json::json!({"fail": false}))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+    resolve_dispute(&escrow, owner, deal_5, "release")
+        .await?
+        .into_result()?;
+    assert_eq!(get_deal(&escrow, deal_5).await?.status, "Released");
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, 3 * price);
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
 
     Ok(())
 }

@@ -338,6 +338,9 @@ impl Contract {
         let price = deal.price;
         if outcome == "release" {
             let seller = deal.seller.clone();
+            // Lock the deal before transferring: a second resolve sees
+            // Delivered (not Disputed) and is rejected, so no double payout.
+            deal.status = DealStatus::Delivered;
             let transfer_promise = Promise::new(self.usdc.clone()).function_call(
                 "ft_transfer".to_string(),
                 near_sdk::serde_json::json!({
@@ -360,6 +363,8 @@ impl Contract {
             )
         } else if outcome == "refund" {
             let payer = deal.payer.clone().expect(ERR_NOT_PAYER);
+            // Same lock as above: Expired (not Disputed) blocks a second payout.
+            deal.status = DealStatus::Expired;
             let transfer_promise = Promise::new(self.usdc.clone()).function_call(
                 "ft_transfer".to_string(),
                 near_sdk::serde_json::json!({
@@ -400,6 +405,9 @@ impl Contract {
         require!(predecessor == deal.buyer, ERR_NOT_BUYER);
         let payer = deal.payer.clone().expect(ERR_NOT_PAYER);
         let price = deal.price;
+        // Lock the deal before transferring: repeated timeout claims see
+        // Expired (not Disputed) and are rejected, so no double refund.
+        deal.status = DealStatus::Expired;
 
         let transfer_promise = Promise::new(self.usdc.clone()).function_call(
             "ft_transfer".to_string(),
@@ -1352,9 +1360,19 @@ mod tests {
         let (mut contract, deal_id) = setup_disputed_deal();
         testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
         let _ = contract.resolve_dispute(deal_id, "release".to_string());
-        // Callback pending: still Disputed until the transfer settles.
+        // Locked as Delivered until the transfer settles; a second resolve
+        // in this state is rejected, so no double payout is possible.
         let deal = contract.get_deal(deal_id).expect("Deal should exist");
-        assert_eq!(deal.status, "Disputed");
+        assert_eq!(deal.status, "Delivered");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn resolve_dispute_twice_release_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
+        let _ = contract.resolve_dispute(deal_id, "release".to_string());
+        contract.resolve_dispute(deal_id, "release".to_string());
     }
 
     #[test]
@@ -1362,8 +1380,18 @@ mod tests {
         let (mut contract, deal_id) = setup_disputed_deal();
         testing_env!(setup_context(accounts(5), 1_600_000).build()); // arbiter
         let _ = contract.resolve_dispute(deal_id, "refund".to_string());
+        // Locked as Expired until the transfer settles.
         let deal = contract.get_deal(deal_id).expect("Deal should exist");
-        assert_eq!(deal.status, "Disputed");
+        assert_eq!(deal.status, "Expired");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn resolve_dispute_twice_refund_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(5), 1_600_000).build()); // arbiter
+        let _ = contract.resolve_dispute(deal_id, "refund".to_string());
+        contract.resolve_dispute(deal_id, "refund".to_string());
     }
 
     #[test]
@@ -1405,8 +1433,17 @@ mod tests {
         let (mut contract, deal_id) = setup_disputed_deal();
         testing_env!(setup_context(accounts(3), 1_500_000 + DISPUTE_WINDOW_MS + 1).build()); // buyer
         let _ = contract.claim_dispute_timeout_refund(deal_id);
-        // Callback pending: still Disputed until the transfer settles.
+        // Locked as Expired until the transfer settles.
         let deal = contract.get_deal(deal_id).expect("Deal should exist");
-        assert_eq!(deal.status, "Disputed");
+        assert_eq!(deal.status, "Expired");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn dispute_timeout_claim_twice_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(3), 1_500_000 + DISPUTE_WINDOW_MS + 1).build()); // buyer
+        let _ = contract.claim_dispute_timeout_refund(deal_id);
+        contract.claim_dispute_timeout_refund(deal_id);
     }
 }
