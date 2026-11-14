@@ -58,10 +58,16 @@ tries to mark delivered without a rider", are both chosen by the seller.
 
 Test: `h1_seller_names_themself_rider_and_releases_without_delivery`.
 
-Fix: make the buyer commit to the QR when paying. For example `ft_on_transfer` takes
-`msg = "<deal_id>:<qr_hash_hex>"` and requires it to equal the stored hash (or sets the hash at
-funding time, from the buyer's wallet). Also require `rider != seller && rider != buyer` in
-`create_deal`, and add `qr_hash` to `DealView` (L-2) so the web app can show the match.
+Fix: the secret must be made by the buyer, not only repeated by the buyer. Having the funding
+message equal a hash the seller stored proves nothing, because the seller chose that hash and knows
+its preimage. So the buyer's wallet generates the secret and sets the hash at funding time (for
+example `ft_on_transfer` with `msg = "<deal_id>:<qr_hash_hex>"` that sets `qr_hash` while the deal
+is still `Created`), and `create_deal` must not accept a hash from the seller. Even then, the
+contract cannot tell who made a preimage, so this relies on the web app generating it in the buyer's
+browser with a cryptographic RNG and never sending it to the seller. Also require
+`rider != seller && rider != buyer` in `create_deal` (a colluding seller can still name a second
+account as rider; that is the accepted collusion case of the threat model), and add `qr_hash` to
+`DealView` (L-2) so the web app can show the match.
 
 ### H-2: a dispute locks the funds forever
 
@@ -99,8 +105,10 @@ contract with no way out.
 
 Test: `m2_failed_refund_cannot_be_retried`.
 
-Fix: accept `Funded` or `Expired` in `claim_timeout_refund_for`, or restore `Funded` in the
-failure branch.
+Fix: restore `Funded` in the failure branch of `on_refund`, so the deal can be refunded again.
+Do not accept `Expired` in `claim_timeout_refund_for`: the status is `Expired` while the transfer is
+in flight, so a second request would start a second transfer to the same payer before the callback
+runs.
 
 ### M-3: callbacks overwrite the status
 
@@ -133,7 +141,7 @@ deal; a timeout refund then goes to them. Not a theft path, but `ERR_NOT_PAYER`/
 suggest the intent was buyer-only funding. Decide and document; require `sender_id == deal.buyer`
 if buyer-only.
 
-Test: `l1_a_third_party_can_fund_and_receives_the_refund`.
+Test: `l1_a_third_party_can_fund_and_is_recorded_as_payer`.
 
 ### L-2: the QR hash is not visible
 
@@ -149,7 +157,7 @@ the price locked with no timeout refund. Cap it (the agent already caps drafts a
 
 - `confirm_delivery` after the deadline fails with `ERR_NOT_EXPIRED` (line 170), which reads as
   the opposite. Use a `ERR_DEADLINE_PASSED` code.
-- `hex_keccak` (line 404) is SHA-256 of the hex string bytes, not Keccak. Rename it.
+- `hex_keccak` (line 404) is SHA-256, not Keccak, and it hashes the trimmed UTF-8 bytes of the hex string (the text `"ab12..."`), not the decoded bytes. A client that hashes decoded bytes gets a different hash and can never confirm. Document this encoding in `docs/api.md` and rename the function.
 - `claim_timeout_refund` (line 229) always panics; drop it or document it.
 - `ERR_ALREADY_RELEASED` and `ERR_NO_PAYER` are never used.
 - `cancel_unfunded` records a cancelled deal as `Refunded` although no money moved; a separate

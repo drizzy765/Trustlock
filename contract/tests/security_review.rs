@@ -185,7 +185,7 @@ fn m4_anyone_creates_deals_and_the_contract_pays_storage() {
 
 // L-1: any account can fund a deal; the refund then goes to that account, not the buyer.
 #[test]
-fn l1_a_third_party_can_fund_and_receives_the_refund() {
+fn l1_a_third_party_can_fund_and_is_recorded_as_payer() {
     act(seller(), NOW);
     let mut c = Contract::new(usdc());
     let id = c.create_deal(
