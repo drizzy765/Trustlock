@@ -10,6 +10,10 @@
 use crate::utils::*;
 
 #[tokio::test]
+// Fast-forwards ~7 days of sandbox blocks, which takes hours, so it is skipped in CI.
+// The same path is covered by the dispute_timeout_claim_* unit tests in lib.rs.
+// Run manually: cargo test --test workspaces s15 -- --ignored
+#[ignore = "slow: fast-forwards 7 days of blocks"]
 async fn s15_dispute_timeout_exit() -> anyhow::Result<()> {
     let worker = locked_sandbox().await?;
 
