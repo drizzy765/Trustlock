@@ -8,4 +8,8 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = { version = "5.5" }
+# Must mirror the escrow's near-sdk features: without "unit-testing",
+# near-sdk-env compiles the *local* panic path (eprintln + trap) instead of
+# the host `panic_utf8`, so every mock panic becomes an unreachable trap
+# with no message. The escrow proves this configuration works on-chain.
+near-sdk = { version = "5.5", features = ["unit-testing"] }

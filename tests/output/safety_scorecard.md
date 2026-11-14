@@ -19,30 +19,43 @@ Control case: a screenshot that matches its bank alert is still `CONFIRMED` (`te
 
 ## Chain / contract and intents
 
-Run on 2026-11-13, branch `fix/issue-6-workspaces-tests`, Rust 1.99.1, Linux.
-Command, from repo root: `cargo test` (runs the 21 contract unit tests plus
-all 13 workspaces tests by default; no `#[ignore]`, no extra flags).
-Raw output: `workspaces_battery.log` in this folder.
-Full result: 21 unit passed, 0 failed; 13 workspaces passed, 0 failed.
+Run on 2026-11-14, branch `fix/issue-18-contract-fixes`, Rust 1.99.1, Linux.
+Unit: `cargo test -p trustlock --lib` → 31 passed, 0 failed.
+Workspaces focused runs (`cargo test --test workspaces spec::sXX`,
+same sandbox runner as #6): s11, s12, s14 green (see below); full S01–S15
+battery re-running at PR time, S15 (7-day fast-forward) still going —
+results will be appended when it lands.
 
 | ID | Result | Why |
 | --- | --- | --- |
-| S01–S09 | PASS (9 tests) | `cargo test --test workspaces spec::s0[1-9]*`: S01 create→fund→rider release (`Released`, seller += price, buyer exact); S02 double confirm panics `ERR_BAD_STATUS`, no double pay; S03 same-QR second confirm + third create both panic `ERR_REPLAYED_QR`; S04 post-deadline `claim_timeout_refund_for` → `Refunded`, payer whole; S05 early claim panics `ERR_NOT_EXPIRED`, stays `Funded`; S06 stranger confirm panics `ERR_NOT_RIDER`; S07 restricted key calling `claim_timeout_refund_for`/`open_dispute` rejected at the key (`InvalidAccessKeyError(MethodNameMismatch)`), same key still releases via `confirm_delivery`; S08 wrong amount and double fund refunded in full (`0` kept), deal unmoved; S09 `open_dispute` → `Disputed`, confirm frozen with `ERR_BAD_STATUS`, funds locked |
-| S10–S13 | PASS (4 tests) | S10 wrong QR panics `ERR_BAD_QR`, seller `confirm_receipt` panics `ERR_NOT_BUYER`, buyer `confirm_receipt` → `Released` + paid; S11 failed payout restores `Funded` with QR freed and balances intact (retry needs a contract fix, see below); S12 failed refund keeps `Expired` with funds intact (retry needs a contract fix, see below); S13 direct `on_payout`/`on_refund` calls panic (private), dispute on `Released` panics `ERR_BAD_STATUS` |
+| S01–S09 | PASS (9 tests) | Unchanged from #6 (`cargo test --test workspaces spec::s0[1-9]*` was green 13/13 with S10–S13 on 2026-11-13; contract changes since are additive plus the two retry-restore fixes below, covered by unit tests and S11/S12). S07 key-confinement proof stands: restricted key calling `claim_timeout_refund_for`/`open_dispute` rejected at the key (`InvalidAccessKeyError(MethodNameMismatch)`), same key still releases via `confirm_delivery`. |
+| S10–S13 | PASS (4 tests) | Unchanged from #6, except S11/S12 now assert successful retry (see below). S10 buyer `confirm_receipt` → `Released` + paid; S13 direct `on_payout`/`on_refund` calls panic (private), dispute on `Released` panics `ERR_BAD_STATUS`. |
+| S11 | PASS (2026-11-14) | Mock token fails the first payout: deal back to `Funded`, QR unconsumed, `used_qr` entry cleared, seller 0 / escrow holds price. Flag cleared, rescan with the same QR → `Released`, seller paid exactly once (buyer 9M of 10M, escrow 0). |
+| S12 | PASS (2026-11-14) | Mock token fails the timeout refund: deal back to `Funded` (not stuck `Expired`), balances intact. Flag cleared, retry `claim_timeout_refund_for` → `Refunded`; buyer balance rises by exactly the price (escrow 0, seller 0). |
+| S14 | PASS (2026-11-14) | `resolve_dispute` release path → `Released` + seller paid; refund path → `Refunded` + buyer whole; stranger rejected `ERR_NOT_ADMIN`; unknown outcome `ERR_BAD_OUTCOME`; non-`Disputed` deal `ERR_BAD_STATUS`; `set_arbiter` owner-only and the new arbiter resolves. |
+| S15 | RUNNING | `claim_dispute_timeout_refund`: early claim `ERR_DISPUTE_OPEN`, non-buyer `ERR_NOT_BUYER`, buyer after the 7-day window → `Refunded` with payer made whole. Full result to be appended. |
+| #18 unit | PASS (10 tests) | `cargo test -p trustlock --lib`: 31 passed (21 pre-existing + 10 new: resolve auth/outcomes, set_arbiter handoff, dispute-window early/non-buyer/buyer timing). |
 | I01 | PASS (2026-11-13) | Real `POST /v0/quote` with `dry: true`; verified quote id stored on the draft; no tx hash. `tests/output/intents_dry_run.log`, `tests/output/intents_dry_run_http.log`, `docs/intents_dry_run.md`, `tests/test_agent_intents.py::test_i01_*`. |
 | I03 | PASS (2026-11-13) | Tampered quote bytes (amounts, recipient, origin, timestamp, signature) rejected with 502 `ERR_BAD_QUOTE_SIGNATURE` before any amount is returned; quotes that pass signature verification but carry different swap/route/type terms are rejected with `ERR_QUOTE_MISMATCH`. `tests/test_agent_intents.py::test_i03_*`, `::test_a_valid_signature_for_different_terms_is_refused`. |
 | I02 | NOT RUN | Live execute is the separate optional mainnet issue. `/intents/execute` returns 501 when live; the UI cannot render `live` without `executed: true` and a real hash. |
 
-Latest agent suite after the Intents work: 219 passed, 0 failed (2026-11-13).
+Latest agent suite: 235 passed, 0 failed (2026-11-14, `agent/.venv/bin/python -m pytest tests/`).
 
-Known contract gaps found by S11/S12 (no contract change in #6; candidates for #18):
-- Failed `confirm_delivery` payout restores `Funded` but leaves the QR in `used_qr`, so the documented retry panics `ERR_REPLAYED_QR`.
-- Failed `claim_timeout_refund_for` keeps `Expired`, but the claim entry only accepts `Funded`, so the documented retry panics `ERR_BAD_STATUS`.
-- In both cases no funds are lost or double-paid; the tests pin this safe behavior plus the retry panics.
+v2 contract code verified: the on-chain code at `trustlock-v2-timi.testnet`
+was downloaded via RPC and is byte-identical to this branch's
+`cargo build` output (sha256 `f6ac35ff1ae8f76fda75a82de351b6a686f17a682a954a4b1dc9e4f73528609d`,
+code hash `HbubgDJrKngoPvYz76qGJDA3b6kBiDCGjY1zrSKz44hS`). No redeploy needed.
+
+Test-infra note: the mock token crate needed the same `unit-testing`
+feature as the escrow — without it, `env::panic_str` compiles to the local
+branch (eprintln + trap) instead of the host call, so every mock panic
+became an unreachable trap with no message. Also: a panicking receipt rolls
+back its own writes, so S11/S12 clear the failure flag explicitly before
+retrying (no auto-reset).
 
 ## Pass bar for the video
 
-Met on the automated battery: A01/A02, S01–S13, and I01/I03 all pass (I02 is testnet-only by design). Human steps still to do: record the demo, post on X, submit the application.
+Met on the automated battery: A01/A02, S01–S13, and I01/I03 all pass (I02 is testnet-only by design). #18 adds S14 (green) and S15 (running; result to be appended). Human steps still to do: record the demo, post on X, submit the application.
 
 ## Environment note (chain tests)
 

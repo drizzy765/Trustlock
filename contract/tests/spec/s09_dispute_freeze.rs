@@ -16,7 +16,7 @@ async fn s09_dispute_freeze() -> anyhow::Result<()> {
     let buyer = worker.dev_create_account().await?;
 
     let ft = deploy_mock_ft(&worker, &ft_owner).await?;
-    let escrow = deploy_trustlock(&worker, ft.id()).await?;
+    let escrow = deploy_trustlock(&worker, ft.id(), ft_owner.id()).await?;
 
     for account in [&seller, &buyer, escrow.as_account()] {
         register_storage(&ft, account).await?;

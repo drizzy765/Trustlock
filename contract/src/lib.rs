@@ -21,6 +21,14 @@ pub const ERR_DEADLINE: &str = "ERR_DEADLINE";
 pub const ERR_NOT_BUYER: &str = "ERR_NOT_BUYER";
 pub const ERR_NOT_SELLER: &str = "ERR_NOT_SELLER";
 pub const ERR_NO_PAYER: &str = "ERR_NO_PAYER";
+pub const ERR_NOT_ADMIN: &str = "ERR_NOT_ADMIN";
+pub const ERR_NOT_OWNER: &str = "ERR_NOT_OWNER";
+pub const ERR_BAD_OUTCOME: &str = "ERR_BAD_OUTCOME";
+pub const ERR_DISPUTE_OPEN: &str = "ERR_DISPUTE_OPEN";
+
+/// A dispute left open past this window can be refunded by the buyer.
+/// Nothing may stay `Disputed` forever.
+pub const DISPUTE_WINDOW_MS: u64 = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 #[derive(
     BorshDeserialize,
@@ -71,6 +79,7 @@ pub struct Deal {
     pub qr_hash: [u8; 32],
     pub status: DealStatus,
     pub qr_consumed: bool,
+    pub disputed_at_ms: u64,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -84,6 +93,7 @@ enum StorageKey {
 #[derive(PanicOnDefault)]
 pub struct Contract {
     pub owner: AccountId,
+    pub arbiter: AccountId,
     pub usdc: AccountId,
     pub next_id: u64,
     pub deals: LookupMap<u64, Deal>,
@@ -93,14 +103,22 @@ pub struct Contract {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(usdc: AccountId) -> Self {
+    pub fn new(usdc: AccountId, arbiter: AccountId) -> Self {
         Self {
             owner: env::predecessor_account_id(),
+            arbiter,
             usdc,
             next_id: 1,
             deals: LookupMap::new(StorageKey::Deals),
             used_qr: LookupMap::new(StorageKey::UsedQr),
         }
+    }
+
+    /// Owner-only: replace the arbiter (dispute resolver).
+    pub fn set_arbiter(&mut self, arbiter: AccountId) {
+        require!(env::predecessor_account_id() == self.owner, ERR_NOT_OWNER);
+        self.arbiter = arbiter;
+        env::log_str("EVENT_JSON:{\"event\":\"arbiter_set\"}");
     }
 
     pub fn create_deal(
@@ -133,6 +151,7 @@ impl Contract {
                 qr_hash,
                 status: DealStatus::Created,
                 qr_consumed: false,
+                disputed_at_ms: 0,
             },
         );
         id
@@ -162,7 +181,7 @@ impl Contract {
     pub fn confirm_delivery(&mut self, deal_id: u64, qr_preimage_hex: String) -> Promise {
         let now = env::block_timestamp_ms();
         let predecessor = env::predecessor_account_id();
-        let hash = hex_keccak(&qr_preimage_hex);
+        let hash = sha256_hex(&qr_preimage_hex);
 
         let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
         require!(predecessor == deal.rider, ERR_NOT_RIDER);
@@ -218,18 +237,14 @@ impl Contract {
             Err(_) => {
                 // Transfer failed, restore previous state so it can be retried
                 let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+                let qr_hash = deal.qr_hash;
                 deal.status = prev_status;
                 deal.qr_consumed = false; // Allow retry with same QR
+                self.used_qr.remove(&qr_hash); // Free the QR for the retry scan
                 env::log_str("payout failed; state restored");
                 false
             }
         }
-    }
-
-    pub fn claim_timeout_refund(&mut self) {
-        // Keep the ABI stable while the full body is implemented against a deal id.
-        // Use `claim_timeout_refund_for`.
-        env::panic_str("ERR_USE_claim_timeout_refund_for");
     }
 
     pub fn claim_timeout_refund_for(&mut self, deal_id: u64) -> Promise {
@@ -258,13 +273,14 @@ impl Contract {
         transfer_promise.then(
             Self::ext(env::current_account_id())
                 .with_static_gas(Gas::from_tgas(10))
-                .on_refund(deal_id),
+                .on_refund(deal_id, DealStatus::Funded),
         )
     }
 
-    /// Callback after refund attempt. If transfer failed, restore to Expired state.
+    /// Callback after refund attempt. If transfer failed, restore the previous
+    /// state so the refund can be retried.
     #[private]
-    pub fn on_refund(&mut self, deal_id: u64) -> bool {
+    pub fn on_refund(&mut self, deal_id: u64, prev_status: DealStatus) -> bool {
         let promise_result = env::promise_result_checked(0, 1024);
         match promise_result {
             Ok(_) => {
@@ -278,8 +294,10 @@ impl Contract {
                 true
             }
             Err(_) => {
-                // Transfer failed, keep in Expired state for retry
-                env::log_str("refund failed; state preserved as Expired");
+                // Transfer failed, restore previous state so it can be retried
+                let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+                deal.status = prev_status;
+                env::log_str("refund failed; state restored");
                 false
             }
         }
@@ -297,6 +315,120 @@ impl Contract {
             ERR_BAD_STATUS
         );
         deal.status = DealStatus::Disputed;
+        deal.disputed_at_ms = env::block_timestamp_ms();
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"event\":\"disputed\",\"deal_id\":{}}}",
+            deal_id
+        ));
+    }
+
+    /// Admin resolution of a Disputed deal. Callable only by the owner or the
+    /// arbiter (never by the deal agent: it holds no key that can call this).
+    /// `outcome` is `"release"` (pay the seller) or `"refund"` (refund the
+    /// payer), settled with the same Promise + callback pattern as the
+    /// delivery and timeout paths.
+    pub fn resolve_dispute(&mut self, deal_id: u64, outcome: String) -> Promise {
+        let predecessor = env::predecessor_account_id();
+        require!(
+            predecessor == self.owner || predecessor == self.arbiter,
+            ERR_NOT_ADMIN
+        );
+        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+        require!(deal.status == DealStatus::Disputed, ERR_BAD_STATUS);
+        let price = deal.price;
+        if outcome == "release" {
+            let seller = deal.seller.clone();
+            // Lock the deal before transferring: a second resolve sees
+            // Delivered (not Disputed) and is rejected, so no double payout.
+            deal.status = DealStatus::Delivered;
+            let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+                "ft_transfer".to_string(),
+                near_sdk::serde_json::json!({
+                    "receiver_id": seller,
+                    "amount": price.to_string(),
+                })
+                .to_string()
+                .into_bytes(),
+                NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+                Gas::from_tgas(50),
+            );
+            env::log_str(&format!(
+                "EVENT_JSON:{{\"event\":\"resolved\",\"deal_id\":{},\"outcome\":\"release\"}}",
+                deal_id
+            ));
+            transfer_promise.then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas::from_tgas(10))
+                    .on_payout(deal_id, DealStatus::Disputed),
+            )
+        } else if outcome == "refund" {
+            let payer = deal.payer.clone().expect(ERR_NOT_PAYER);
+            // Same lock as above: Expired (not Disputed) blocks a second payout.
+            deal.status = DealStatus::Expired;
+            let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+                "ft_transfer".to_string(),
+                near_sdk::serde_json::json!({
+                    "receiver_id": payer,
+                    "amount": price.to_string(),
+                })
+                .to_string()
+                .into_bytes(),
+                NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+                Gas::from_tgas(50),
+            );
+            env::log_str(&format!(
+                "EVENT_JSON:{{\"event\":\"resolved\",\"deal_id\":{},\"outcome\":\"refund\"}}",
+                deal_id
+            ));
+            transfer_promise.then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas::from_tgas(10))
+                    .on_refund(deal_id, DealStatus::Disputed),
+            )
+        } else {
+            env::panic_str(ERR_BAD_OUTCOME)
+        }
+    }
+
+    /// Automatic exit for stale disputes: once a dispute has stayed open past
+    /// `DISPUTE_WINDOW_MS`, the buyer can claim the refund themselves. Nothing
+    /// may stay `Disputed` forever.
+    pub fn claim_dispute_timeout_refund(&mut self, deal_id: u64) -> Promise {
+        let now = env::block_timestamp_ms();
+        let predecessor = env::predecessor_account_id();
+        let deal = self.deals.get_mut(&deal_id).expect("ERR_NO_DEAL");
+        require!(deal.status == DealStatus::Disputed, ERR_BAD_STATUS);
+        require!(
+            now > deal.disputed_at_ms.saturating_add(DISPUTE_WINDOW_MS),
+            ERR_DISPUTE_OPEN
+        );
+        require!(predecessor == deal.buyer, ERR_NOT_BUYER);
+        let payer = deal.payer.clone().expect(ERR_NOT_PAYER);
+        let price = deal.price;
+        // Lock the deal before transferring: repeated timeout claims see
+        // Expired (not Disputed) and are rejected, so no double refund.
+        deal.status = DealStatus::Expired;
+
+        let transfer_promise = Promise::new(self.usdc.clone()).function_call(
+            "ft_transfer".to_string(),
+            near_sdk::serde_json::json!({
+                "receiver_id": payer,
+                "amount": price.to_string(),
+            })
+            .to_string()
+            .into_bytes(),
+            NearToken::from_yoctonear(1), // Attach 1 yoctoNEAR for storage
+            Gas::from_tgas(50),
+        );
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"event\":\"dispute_timeout\",\"deal_id\":{}}}",
+            deal_id
+        ));
+        transfer_promise.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(Gas::from_tgas(10))
+                .on_refund(deal_id, DealStatus::Disputed),
+        )
     }
 
     /// Buyer confirms receipt and releases funds to seller.
@@ -373,6 +505,7 @@ pub struct DealView {
     pub deadline_ms: u64,
     pub status: String,
     pub qr_consumed: bool,
+    pub disputed_at_ms: u64,
 }
 
 impl From<&Deal> for DealView {
@@ -387,6 +520,7 @@ impl From<&Deal> for DealView {
             deadline_ms: d.deadline_ms,
             status: d.status.as_str().to_string(),
             qr_consumed: d.qr_consumed,
+            disputed_at_ms: d.disputed_at_ms,
         }
     }
 }
@@ -401,8 +535,9 @@ fn parse_hex32(s: &str) -> [u8; 32] {
     out
 }
 
-fn hex_keccak(preimage_hex: &str) -> [u8; 32] {
-    // Demo hash: sha256 of the hex string bytes. Replace with the agreed QR schema.
+/// QR hash scheme: sha256 over the ASCII bytes of the hex-string preimage.
+/// The buyer reveals the preimage; the contract hashes and compares.
+fn sha256_hex(preimage_hex: &str) -> [u8; 32] {
     env::sha256_array(preimage_hex.trim().as_bytes())
 }
 
@@ -420,10 +555,10 @@ mod tests {
         builder
     }
 
-    /// Create a test contract
+    /// Create a test contract (owner = current predecessor, arbiter = accounts(5))
     fn create_test_contract() -> Contract {
         let usdc = accounts(0);
-        Contract::new(usdc)
+        Contract::new(usdc, accounts(5))
     }
 
     /// Generate a test QR hash (64 hex chars)
@@ -1151,5 +1286,164 @@ mod tests {
         context = setup_context(seller.clone(), 1_500_000);
         testing_env!(context.build());
         contract.cancel_unfunded(deal_id);
+    }
+
+    // =========================================================================
+    // Dispute resolution (admin + timeout exit)
+    // =========================================================================
+
+    /// Funded-then-Disputed deal 1, disputed at t=1_500_000 ms.
+    /// Owner = seller (creator), arbiter = accounts(5).
+    fn setup_disputed_deal() -> (Contract, u64) {
+        let seller = accounts(1);
+        let rider = accounts(2);
+        let buyer = accounts(3);
+        let usdc = accounts(0);
+
+        testing_env!(setup_context(seller.clone(), 1_000_000).build());
+        let mut contract = create_test_contract();
+        let deal_id = contract.create_deal(
+            seller.clone(),
+            rider,
+            buyer.clone(),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+
+        testing_env!(setup_context(usdc, 1_100_000).build());
+        let _ = contract.ft_on_transfer(buyer.clone(), U128(1_000_000), deal_id.to_string());
+
+        testing_env!(setup_context(buyer, 1_500_000).build());
+        contract.open_dispute(deal_id, "Item not delivered".to_string());
+        (contract, deal_id)
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_ADMIN")]
+    fn resolve_dispute_rejects_non_admin() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        // Buyer is neither owner nor arbiter.
+        contract.resolve_dispute(deal_id, "release".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn resolve_dispute_rejects_non_disputed_deal() {
+        let seller = accounts(1);
+        testing_env!(setup_context(seller.clone(), 1_000_000).build());
+        let mut contract = create_test_contract();
+        let deal_id = contract.create_deal(
+            seller,
+            accounts(2),
+            accounts(3),
+            "Test Item".to_string(),
+            U128(1_000_000),
+            2_000_000,
+            test_qr_hash(),
+        );
+        testing_env!(setup_context(accounts(1), 1_100_000).build());
+        contract.resolve_dispute(deal_id, "release".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_OUTCOME")]
+    fn resolve_dispute_rejects_unknown_outcome() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
+        contract.resolve_dispute(deal_id, "split".to_string());
+    }
+
+    #[test]
+    fn resolve_dispute_release_by_owner_returns_promise() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
+        let _ = contract.resolve_dispute(deal_id, "release".to_string());
+        // Locked as Delivered until the transfer settles; a second resolve
+        // in this state is rejected, so no double payout is possible.
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Delivered");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn resolve_dispute_twice_release_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
+        let _ = contract.resolve_dispute(deal_id, "release".to_string());
+        contract.resolve_dispute(deal_id, "release".to_string());
+    }
+
+    #[test]
+    fn resolve_dispute_by_arbiter_returns_promise() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(5), 1_600_000).build()); // arbiter
+        let _ = contract.resolve_dispute(deal_id, "refund".to_string());
+        // Locked as Expired until the transfer settles.
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Expired");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn resolve_dispute_twice_refund_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(5), 1_600_000).build()); // arbiter
+        let _ = contract.resolve_dispute(deal_id, "refund".to_string());
+        contract.resolve_dispute(deal_id, "refund".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_OWNER")]
+    fn set_arbiter_rejects_non_owner() {
+        let (mut contract, _) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(3), 1_600_000).build()); // buyer
+        contract.set_arbiter(accounts(4));
+    }
+
+    #[test]
+    fn set_arbiter_owner_hands_off_to_new_arbiter() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_600_000).build()); // owner
+        contract.set_arbiter(accounts(4));
+        testing_env!(setup_context(accounts(4), 1_700_000).build()); // new arbiter
+        let _ = contract.resolve_dispute(deal_id, "release".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_DISPUTE_OPEN")]
+    fn dispute_timeout_claim_rejects_open_window() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        // Disputed at 1_500_000; window (7d) not elapsed.
+        testing_env!(setup_context(accounts(3), 1_500_000 + DISPUTE_WINDOW_MS - 1_000).build());
+        contract.claim_dispute_timeout_refund(deal_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NOT_BUYER")]
+    fn dispute_timeout_claim_rejects_non_buyer() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(1), 1_500_000 + DISPUTE_WINDOW_MS + 1).build()); // seller
+        contract.claim_dispute_timeout_refund(deal_id);
+    }
+
+    #[test]
+    fn dispute_timeout_claim_by_buyer_after_window_returns_promise() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(3), 1_500_000 + DISPUTE_WINDOW_MS + 1).build()); // buyer
+        let _ = contract.claim_dispute_timeout_refund(deal_id);
+        // Locked as Expired until the transfer settles.
+        let deal = contract.get_deal(deal_id).expect("Deal should exist");
+        assert_eq!(deal.status, "Expired");
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_BAD_STATUS")]
+    fn dispute_timeout_claim_twice_rejected() {
+        let (mut contract, deal_id) = setup_disputed_deal();
+        testing_env!(setup_context(accounts(3), 1_500_000 + DISPUTE_WINDOW_MS + 1).build()); // buyer
+        let _ = contract.claim_dispute_timeout_refund(deal_id);
+        contract.claim_dispute_timeout_refund(deal_id);
     }
 }

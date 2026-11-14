@@ -10,7 +10,7 @@ use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
 use near_sdk::{
-    env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, PromiseOrValue,
+    env, near, require, AccountId, BorshStorageKey, Gas, PanicOnDefault, PromiseOrValue,
 };
 
 const STORAGE_DEPOSIT_YOCTO: u128 = 1_250_000_000_000_000_000_000; // 0.00125 NEAR
@@ -69,8 +69,10 @@ impl MockFt {
         self.total_supply += amount.0;
     }
 
-    /// Owner-only failure injection for S11/S12. The next `ft_transfer` or
-    /// `ft_transfer_call` panics, then the flag resets.
+    /// Owner-only failure injection for S11/S12. While set, `ft_transfer` and
+    /// `ft_transfer_call` panic. Clear it with `set_fail_next_transfer(false)`
+    /// to re-arm: a panicking receipt rolls back its own writes, so the flag
+    /// deliberately does NOT auto-reset on failure.
     pub fn set_fail_next_transfer(&mut self, fail: bool) {
         require!(env::predecessor_account_id() == self.owner, "ERR_NOT_OWNER");
         self.fail_next_transfer = fail;
@@ -188,7 +190,6 @@ impl MockFt {
 impl MockFt {
     fn maybe_fail(&mut self, msg: &str) {
         if self.fail_next_transfer {
-            self.fail_next_transfer = false;
             env::panic_str(msg);
         }
     }

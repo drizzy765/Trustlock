@@ -2,10 +2,13 @@
 #
 # Attaches a function-call access key on the rider account that can ONLY call
 # `confirm_delivery` on the escrow contract, with a 0.25 NEAR allowance.
-# Matches the hand-added key (tx AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1fVE):
+# Same FunctionCall shape as the hand-added v1 key
+# (tx AL3eNPhtDesAfhFBogY4w66KC4HFNzaFFNxn5exf1fVE on trustlock-timi.testnet):
 #   permission.FunctionCall = { allowance: "250000000000000000000000",
 #                               method_names: ["confirm_delivery"],
-#                               receiver_id: "trustlock-timi.testnet" }
+#                               receiver_id: "trustlock-v2-timi.testnet" }
+# NOTE: access keys are receiver-bound, so v1 keys do not carry over.
+# Run this script again to add a fresh key for the v2 contract.
 #
 # Exact commands this script runs (near-cli-rs syntax --
 # https://github.com/near/near-cli-rs/blob/main/docs/GUIDE.en.md):
@@ -15,7 +18,7 @@
 #     near account add-key rider-timi.testnet `
 #       grant-function-call-access `
 #         --allowance '0.25 NEAR' `
-#         --contract-account-id trustlock-timi.testnet `
+#         --contract-account-id trustlock-v2-timi.testnet `
 #         --function-names confirm_delivery `
 #       use-manually-provided-public-key ed25519:REPLACE_WITH_RIDER_PUBLIC_KEY `
 #       network-config testnet `
@@ -27,7 +30,7 @@
 #     near account add-key rider-timi.testnet `
 #       grant-function-call-access `
 #         --allowance '0.25 NEAR' `
-#         --contract-account-id trustlock-timi.testnet `
+#         --contract-account-id trustlock-v2-timi.testnet `
 #         --function-names confirm_delivery `
 #       autogenerate-new-keypair --signature-scheme ed25519 save-to-keychain `
 #       network-config testnet `
@@ -38,7 +41,7 @@
 #     near account list-keys rider-timi.testnet network-config testnet now
 #   Expected row for the new key (key value differs per run):
 #     | ed25519:... | <nonce> | only do ["confirm_delivery"] function calls
-#                      on trustlock-timi.testnet with an allowance of 0.250 NEAR |
+#                      on trustlock-v2-timi.testnet with an allowance of 0.250 NEAR |
 #
 # The script never writes a private key, seed phrase, or .near-credentials
 # file into the repo. Nothing secret is committed or printed: only account IDs
@@ -58,7 +61,7 @@ param(
     [string]$RiderAccount = $(if ($env:TRUSTLOCK_RIDER_ACCOUNT) { $env:TRUSTLOCK_RIDER_ACCOUNT } else { "rider-timi.testnet" }),
 
     [Parameter(Mandatory = $false)]
-    [string]$ContractId = $(if ($env:TRUSTLOCK_CONTRACT_ID) { $env:TRUSTLOCK_CONTRACT_ID } else { "trustlock-timi.testnet" }),
+    [string]$ContractId = $(if ($env:TRUSTLOCK_CONTRACT_ID) { $env:TRUSTLOCK_CONTRACT_ID } else { "trustlock-v2-timi.testnet" }),
 
     [Parameter(Mandatory = $false)]
     [string]$Network = $(if ($env:NEAR_NETWORK) { $env:NEAR_NETWORK } else { "testnet" }),

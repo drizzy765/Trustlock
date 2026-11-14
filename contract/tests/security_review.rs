@@ -1,5 +1,6 @@
 //! Security review (issue #21): each test reproduces one finding in docs/security_review.md
-//! against the current contract. The asserts describe today's behaviour, so a test that starts
+//! against the current contract. H-2, M-1 and M-2 assert the fixed behaviour (fixed in #58);
+//! H-1, M-4 and L-1 to L-3 still describe today's behaviour, so a test that starts
 //! failing after a fix is expected: flip it to assert the safe behaviour.
 
 use near_sdk::json_types::U128;
@@ -25,6 +26,9 @@ fn buyer() -> AccountId {
 }
 fn stranger() -> AccountId {
     accounts(4)
+}
+fn arbiter() -> AccountId {
+    accounts(5)
 }
 
 fn ctx(predecessor: AccountId, now_ms: u64) -> VMContextBuilder {
@@ -64,9 +68,10 @@ fn status(c: &Contract, id: u64) -> String {
 }
 
 /// Seller creates a deal (rider and QR hash of the seller's choice) and the buyer funds it.
+/// The seller is the contract owner here (it calls `new`); the arbiter is accounts(5).
 fn funded(rider_id: AccountId, preimage: &str) -> (Contract, u64) {
     act(seller(), NOW);
-    let mut c = Contract::new(usdc());
+    let mut c = Contract::new(usdc(), arbiter());
     let id = c.create_deal(
         seller(),
         rider_id,
@@ -102,14 +107,16 @@ fn h1_seller_names_themself_rider_and_releases_without_delivery() {
     assert_eq!(status(&c, id), "Released");
 }
 
-// H-2: Disputed has no exit. No resolve method exists, so the price is locked forever.
+// H-2 (fixed in #58): disputed funds can be released or refunded by the admin,
+// and a stale dispute times out to a buyer refund. Nothing stays Disputed.
 #[test]
-fn h2_a_dispute_locks_the_funds_for_good() {
+fn h2_disputed_funds_can_be_released_or_refunded() {
     let (mut c, id) = funded(rider(), "buyer-secret");
     act(buyer(), NOW + 1);
     c.open_dispute(id, "changed my mind".into());
     assert_eq!(status(&c, id), "Disputed");
 
+    // The escrow paths stay closed on a disputed deal.
     act(buyer(), NOW + 2);
     assert!(panics(|| drop(c.confirm_receipt(id))).contains("ERR_BAD_STATUS"));
     act(rider(), NOW + 2);
@@ -118,11 +125,34 @@ fn h2_a_dispute_locks_the_funds_for_good() {
     );
     act(buyer(), DEADLINE + 1);
     assert!(panics(|| drop(c.claim_timeout_refund_for(id))).contains("ERR_BAD_STATUS"));
+
+    // The owner (seller here) releases; the deal locks to Delivered first,
+    // so a second resolve is rejected instead of paying twice.
+    act(seller(), NOW + 2);
+    let _ = c.resolve_dispute(id, "release".into());
+    assert_eq!(status(&c, id), "Delivered");
+    assert!(panics(|| drop(c.resolve_dispute(id, "release".into()))).contains("ERR_BAD_STATUS"));
+
+    // The arbiter refunds another disputed deal.
+    let (mut c2, id2) = funded(rider(), "buyer-secret-2");
+    act(buyer(), NOW + 1);
+    c2.open_dispute(id2, "never arrived".into());
+    act(arbiter(), NOW + 2);
+    let _ = c2.resolve_dispute(id2, "refund".into());
+    assert_eq!(status(&c2, id2), "Expired");
+
+    // The buyer exits a stale dispute after the window.
+    let (mut c3, id3) = funded(rider(), "buyer-secret-3");
+    act(buyer(), NOW + 1);
+    c3.open_dispute(id3, "no resolution".into());
+    act(buyer(), NOW + 1 + trustlock::DISPUTE_WINDOW_MS + 1);
+    let _ = c3.claim_dispute_timeout_refund(id3);
+    assert_eq!(status(&c3, id3), "Expired");
 }
 
-// M-1: after a failed payout the QR stays in used_qr, so the rider can never retry.
+// M-1 (fixed in #58): a failed payout frees the QR, so the rider can retry.
 #[test]
-fn m1_failed_payout_blocks_the_rider_retry() {
+fn m1_failed_payout_frees_the_rider_retry() {
     let (mut c, id) = funded(rider(), "buyer-secret");
     act(rider(), NOW + 1);
     let _ = c.confirm_delivery(id, "buyer-secret".into());
@@ -131,29 +161,33 @@ fn m1_failed_payout_blocks_the_rider_retry() {
     assert_eq!(status(&c, id), "Funded");
     assert!(!c.get_deal(id).unwrap().qr_consumed);
 
+    // The same QR scans again: no replay error, payout proceeds.
     act(rider(), NOW + 2);
-    assert!(
-        panics(|| drop(c.confirm_delivery(id, "buyer-secret".into()))).contains("ERR_REPLAYED_QR")
-    );
+    let _ = c.confirm_delivery(id, "buyer-secret".into());
+    assert_eq!(status(&c, id), "Delivered");
 }
 
-// M-2: a failed refund leaves the deal Expired, and the refund only runs from Funded.
+// M-2 (fixed in #58): a failed refund returns to Funded, so it can be retried.
 #[test]
-fn m2_failed_refund_cannot_be_retried() {
+fn m2_failed_refund_returns_to_funded_and_retries() {
     let (mut c, id) = funded(rider(), "buyer-secret");
     act(buyer(), DEADLINE + 1);
     let _ = c.claim_timeout_refund_for(id);
     callback(DEADLINE + 1, PromiseResult::Failed);
-    assert!(!c.on_refund(id));
-    assert_eq!(status(&c, id), "Expired");
+    assert!(!c.on_refund(id, DealStatus::Funded));
+    assert_eq!(status(&c, id), "Funded");
 
     act(buyer(), DEADLINE + 2);
-    assert!(panics(|| drop(c.claim_timeout_refund_for(id))).contains("ERR_BAD_STATUS"));
+    let _ = c.claim_timeout_refund_for(id);
+    assert_eq!(status(&c, id), "Expired");
 }
 
-// M-3: a dispute opened while a payout is in flight is overwritten by the callback.
+// M-3 (fixed in #58): a dispute opened while a payout is in flight is no
+// longer silently erased. A failed transfer restores the pre-call status,
+// so nothing is lost and the payout stays retryable; a completed transfer
+// settles instead of leaving money and status disagreeing.
 #[test]
-fn m3_payout_callback_overwrites_a_dispute() {
+fn m3_dispute_during_payout_is_preserved_on_failure() {
     let (mut c, id) = funded(rider(), "buyer-secret");
     act(rider(), NOW + 1);
     let _ = c.confirm_delivery(id, "buyer-secret".into());
@@ -161,16 +195,26 @@ fn m3_payout_callback_overwrites_a_dispute() {
     c.open_dispute(id, "item damaged".into());
     assert_eq!(status(&c, id), "Disputed");
 
+    // The transfer fails: back to Funded (the status at confirm time), not
+    // stuck, not released; the QR is freed for the retry.
     callback(NOW + 1, PromiseResult::Failed);
-    c.on_payout(id, DealStatus::Funded);
-    assert_eq!(status(&c, id), "Funded"); // the dispute is gone
+    assert!(!c.on_payout(id, DealStatus::Funded));
+    assert_eq!(status(&c, id), "Funded");
+    assert!(!c.get_deal(id).unwrap().qr_consumed);
+
+    // The retry then completes.
+    act(rider(), NOW + 2);
+    let _ = c.confirm_delivery(id, "buyer-secret".into());
+    callback(NOW + 2, PromiseResult::Successful(vec![]));
+    assert!(c.on_payout(id, DealStatus::Funded));
+    assert_eq!(status(&c, id), "Released");
 }
 
 // M-4: anyone can create deals, with any item length, and the contract pays the storage.
 #[test]
 fn m4_anyone_creates_deals_and_the_contract_pays_storage() {
     act(stranger(), NOW);
-    let mut c = Contract::new(usdc());
+    let mut c = Contract::new(usdc(), arbiter());
     let id = c.create_deal(
         seller(),
         rider(),
@@ -187,7 +231,7 @@ fn m4_anyone_creates_deals_and_the_contract_pays_storage() {
 #[test]
 fn l1_a_third_party_can_fund_and_is_recorded_as_payer() {
     act(seller(), NOW);
-    let mut c = Contract::new(usdc());
+    let mut c = Contract::new(usdc(), arbiter());
     let id = c.create_deal(
         seller(),
         rider(),
@@ -206,7 +250,7 @@ fn l1_a_third_party_can_fund_and_is_recorded_as_payer() {
 #[test]
 fn ok_wrong_token_wrong_amount_stranger_and_replay_are_rejected() {
     act(seller(), NOW);
-    let mut c = Contract::new(usdc());
+    let mut c = Contract::new(usdc(), arbiter());
     let id = c.create_deal(
         seller(),
         rider(),
@@ -216,12 +260,12 @@ fn ok_wrong_token_wrong_amount_stranger_and_replay_are_rejected() {
         DEADLINE,
         qr("q"),
     );
-    act(stranger(), NOW);
+    act(stranger(), NOW + 1);
     assert!(
         panics(|| drop(c.ft_on_transfer(buyer(), U128(PRICE), id.to_string())))
             .contains("ERR_BAD_TOKEN")
     );
-    act(usdc(), NOW);
+    act(usdc(), NOW + 1);
     assert!(
         panics(|| drop(c.ft_on_transfer(buyer(), U128(PRICE - 1), id.to_string())))
             .contains("ERR_WRONG_AMOUNT")

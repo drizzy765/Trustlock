@@ -11,6 +11,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Build a workspace WASM. `package` is the cargo package, `file_stem` the
 /// output file name without extension.
+///
+/// NOTE: no RUSTFLAGS feature juggling here. `-C target-feature=-multivalue`
+/// is silently ignored by current rustc (verified byte-identical output),
+/// and the pinned 2.13.4 sandbox accepts modern rustc output, so plain
+/// `cargo build` is correct. Do NOT post-process these artifacts with
+/// wasm-opt on old CPUs (its binary can miscompile/crash there).
 pub fn compile_wasm(package: &str, file_stem: &str) -> anyhow::Result<Vec<u8>> {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir.parent().unwrap();
@@ -42,17 +48,21 @@ pub fn compile_wasm(package: &str, file_stem: &str) -> anyhow::Result<Vec<u8>> {
     Ok(std::fs::read(&wasm_path)?)
 }
 
-/// Deploy the TrustLock escrow, initialized with `usdc` as its token.
+/// Deploy the TrustLock escrow, initialized with `usdc` as its token and
+/// `arbiter` as the dispute resolver (alongside the owner).
+/// Simple specs pass their mock-token owner as arbiter; specs needing
+/// distinct admin roles create their own arbiter account.
 pub async fn deploy_trustlock(
     worker: &Worker<near_workspaces::network::Sandbox>,
     usdc_account: &AccountId,
+    arbiter: &AccountId,
 ) -> anyhow::Result<Contract> {
     let wasm = compile_wasm("trustlock", "trustlock")?;
     let contract = worker.dev_deploy(&wasm).await?;
 
     contract
         .call("new")
-        .args_json(serde_json::json!({"usdc": usdc_account}))
+        .args_json(serde_json::json!({"usdc": usdc_account, "arbiter": arbiter}))
         .max_gas()
         .transact()
         .await?
@@ -154,7 +164,6 @@ pub async fn fund_deal(
 /// View structure for a deal (matches the contract's DealView).
 /// Fields mirror the contract; individual tests assert the ones they need.
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct DealView {
     pub seller: AccountId,
     pub rider: AccountId,
@@ -165,6 +174,7 @@ pub struct DealView {
     pub deadline_ms: u64,
     pub status: String,
     pub qr_consumed: bool,
+    pub disputed_at_ms: u64,
 }
 
 /// Get deal from contract.
@@ -269,6 +279,50 @@ pub async fn confirm_receipt(
 ) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
     Ok(buyer
         .call(escrow.id(), "confirm_receipt")
+        .args_json(serde_json::json!({"deal_id": deal_id}))
+        .max_gas()
+        .transact()
+        .await?)
+}
+
+/// Admin resolution of a Disputed deal (`"release"` pays the seller,
+/// `"refund"` refunds the payer). Signs as `caller` (owner or arbiter).
+pub async fn resolve_dispute(
+    escrow: &Contract,
+    caller: &Account,
+    deal_id: u64,
+    outcome: &str,
+) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(caller
+        .call(escrow.id(), "resolve_dispute")
+        .args_json(serde_json::json!({"deal_id": deal_id, "outcome": outcome}))
+        .max_gas()
+        .transact()
+        .await?)
+}
+
+/// Owner-only: replace the arbiter.
+pub async fn set_arbiter(
+    escrow: &Contract,
+    caller: &Account,
+    arbiter: &AccountId,
+) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(caller
+        .call(escrow.id(), "set_arbiter")
+        .args_json(serde_json::json!({"arbiter": arbiter}))
+        .max_gas()
+        .transact()
+        .await?)
+}
+
+/// Buyer exit for a dispute open past the window (refunds the payer).
+pub async fn claim_dispute_timeout_refund(
+    escrow: &Contract,
+    caller: &Account,
+    deal_id: u64,
+) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(caller
+        .call(escrow.id(), "claim_dispute_timeout_refund")
         .args_json(serde_json::json!({"deal_id": deal_id}))
         .max_gas()
         .transact()

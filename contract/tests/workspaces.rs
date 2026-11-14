@@ -20,4 +20,6 @@ mod spec {
     mod s11_payout_failure;
     mod s12_refund_failure;
     mod s13_dispute_race;
+    mod s14_resolve_dispute;
+    mod s15_dispute_timeout;
 }

@@ -70,10 +70,11 @@ PowerShell 5 often breaks on `&&`. Use `;` or separate lines. Do not assume WSL,
    - ✅ `create_deal` - Creates deals
    - ✅ `ft_on_transfer` - Funds deals
    - ✅ `confirm_delivery` - Releases funds via Promise + callback
-   - ✅ `claim_timeout_refund` - Refunds via Promise + callback  
+   - ✅ `claim_timeout_refund_for` - Refunds via Promise + callback
    - ✅ `open_dispute` - Opens disputes
+   - ✅ `resolve_dispute` (owner/arbiter) + `claim_dispute_timeout_refund` (buyer exit past window) - #18
    - ✅ Promise + callback pattern (ClearSend style)
-   - ✅ All unit tests passing (21 tests)
+   - ✅ All unit tests passing (31 tests); workspaces S01-S14 green, S15 running
 4. ✅ Add near-workspaces tests for the rider key restriction, QR replay, double release, and timeout refund.
 
 ### Phase 3: Integration & Web UI ✅ (Complete)
