@@ -280,7 +280,7 @@ export default function HistoryPage() {
                         </td>
                         <td className="px-5 py-3"><StatusBadge status={d.status} /></td>
                         <td className="px-5 py-3 text-right">
-                          <Link href={`/pay/${d.deal_id}`} className="text-mute underline-offset-4 hover:text-bone hover:underline">
+                          <Link href={`/pay/${d.deal_id}?onchain=1`} className="text-mute underline-offset-4 hover:text-bone hover:underline">
                             Open<span className="sr-only"> deal {d.deal_id}</span>
                           </Link>
                         </td>
@@ -311,7 +311,7 @@ export default function HistoryPage() {
                       <span className="flex min-w-0 items-center gap-1 text-faint">
                         {cp.role} <ChainValue value={cp.account} label={`${cp.role.toLowerCase()} account`} />
                       </span>
-                      <Link href={`/pay/${d.deal_id}`} className="flex h-11 items-center px-2 text-mute hover:text-bone">
+                      <Link href={`/pay/${d.deal_id}?onchain=1`} className="flex h-11 items-center px-2 text-mute hover:text-bone">
                         Open<span className="sr-only"> deal {d.deal_id}</span>
                       </Link>
                     </div>
