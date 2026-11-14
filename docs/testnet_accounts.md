@@ -1,6 +1,32 @@
 # Testnet Accounts — TrustLock
 
-## Deployed Contract
+## Deployed Contract (v2 — current)
+
+**Contract ID:** `trustlock-v2-timi.testnet`  
+**Network:** NEAR Testnet  
+**Status:** ✅ **DEPLOYED AND INITIALIZED**
+
+### Deployment + init (single `with-init-call new` transaction)
+
+- **Transaction:** https://testnet.nearblocks.io/txns/G5Yh8kmEDVRxNJQgPeL2eNRzA8N5GBBuSUsCahJFdG26
+- **Init args:** `{"usdc": "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af", "arbiter": "timi.testnet"}`
+
+### USDC storage deposit (escrow registered as a token holder)
+
+- **Transaction:** https://testnet.nearblocks.io/txns/CzahibtFa1gLrMhhdXRhR82JaCNjXuWqSpvTNdUVuPcj
+- **Account:** `trustlock-v2-timi.testnet` registered on the USDC token
+
+### Rider function-call key (v2, `confirm_delivery`-only)
+
+- **Public key:** `ed25519:9TEAAbYk8SwLf8kDaKPaFAo8VLaBbgM9QihLfGFJp1dG`
+- **Transaction:** https://testnet.nearblocks.io/txns/Gm5Mf6KwtnABRKymrMf62UD81zNXCurYVzXmpdh4oeid
+- **Permission:** FunctionCall, receiver `trustlock-v2-timi.testnet`,
+  methods `["confirm_delivery"]`, allowance 0.25 NEAR (same shape as the
+  v1 key; keys are receiver-bound so v1 keys do not carry over)
+
+## Deployed Contract (v1 — history)
+
+Deals 1–3 live here. Kept for history; new deals go to v2.
 
 **Contract ID:** `trustlock-timi.testnet`  
 **Network:** NEAR Testnet  

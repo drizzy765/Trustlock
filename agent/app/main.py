@@ -6,10 +6,12 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from . import chain, intents
+from .deals_store import DealsStore
 from .deal_agent import detect_language, preview_terms
 from .guard import refusal_message, screen
 from .keystore import KeyStore, KeyStoreError
@@ -21,9 +23,26 @@ load_dotenv()
 
 app = FastAPI(title="TrustLock deal agent", version="0.1.0")
 
-# In-memory store for drafts (replace with persistent storage in production)
-deals_store: dict[int, dict] = {}
-deal_counter = 0
+
+def _allowed_origins() -> list[str]:
+    """Comma-separated TRUSTLOCK_ALLOWED_ORIGINS, trimmed; never a wildcard."""
+    raw = os.environ.get("TRUSTLOCK_ALLOWED_ORIGINS", "")
+    origins = [part.strip() for part in raw.split(",") if part.strip()]
+    return origins or ["http://localhost:3000"]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins(),
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+)
+
+# Drafts live in SQLite (TRUSTLOCK_DB_PATH, default ./trustlock.db) so a
+# restart or redeploy keeps every /pay/[id] link working.
+deals_store = DealsStore()
+deal_counter = deals_store.max_id()
 # Seller agent choice and encrypted model keys (in memory too: a restart forgets them)
 keys = KeyStore()
 
