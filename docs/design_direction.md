@@ -482,3 +482,21 @@ This replaces "Glass Vault" so the doc and the code agree. It came out of a revi
 
 Change control: a change to flow, information priority or state handling goes back to the product owner. Implementation details are recorded in the PR.
 
+
+### 14.1 Landing polish: two narrow rule exceptions (approved by the product owner, 14 Nov 2026)
+
+The landing polish PR keeps every rule above, with two exceptions that apply to the landing page (`web/app/page.tsx` and `web/components/landing/`) only.
+
+**Rule 18 exception (motion on scroll).** "No scroll reveals" still holds, except:
+- In "How a deal works", scroll may decide **which step is active** (the step whose text crosses the middle of the viewport, via `useInView` with a `-45%` margin). The sticky frame swaps its photo (400 ms opacity, 700 ms scale 1.03 → 1) and that step's example overlay. Nothing loops and nothing moves unless the active step changes.
+- The landing has exactly **one masked scroll reveal** (photo 4A in "Who it's for": `clip-path` inset 12% → 0, 800 ms, once at 30% in view) and **one parallax** (the same photo's image only, `y` from −24px to +24px, scaled 1.08 so its edges never show). The hero photo's load-time masked reveal replaces its old scale entrance and is not scroll-driven.
+- Still banned: fade-up on every section, `whileInView=` props, marquees, scroll-jacking, and any parallax over 24px.
+- The hero example deal may cycle (Created → Locked → Delivered → Released, 2 cycles, then it rests on Released). It pauses when out of view, when the tab is hidden, on hover or focus, and with a visible pause button (WCAG 2.2.2).
+- **Reduced motion:** no cycle (the hero card shows the finished deal and the pause button is hidden), instant photo swaps, no clip, no parallax, brackets and checks drawn complete.
+
+**Rule 15 exception (third-party logos).** "No logo wall" still holds. The "Works with your AI agent" section is allowed because it is a **status-labelled capability list rendered from the agent API's own `GET /agent/providers`**, so the page can never claim more than the API does:
+- `works_with` → "Works today" (bone outline chip, not green: green means released). Anthropic is "In testing" and Groq "Being added" until the API reports `works_with`; every other provider is "Coming soon".
+- Logos are monochrome bone inline SVG from simple-icons (CC0), used nominatively, with a non-endorsement footnote. No OpenAI, Groq or Cursor marks: there's no working integration to point them at.
+- Every tile has a name, a "by" line, one sentence and a status. No counts, no marquee, no "trusted by".
+
+**Overlays on photos.** Example UI chips on photos are solid `ink-900` cards with a 1px `line` border and an "Example" label: product UI, not text on a photo. Our logo is still never placed on a photo.
