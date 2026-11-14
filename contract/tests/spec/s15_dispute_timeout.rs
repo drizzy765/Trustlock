@@ -82,7 +82,23 @@ async fn s15_dispute_timeout_exit() -> anyhow::Result<()> {
             }
         }
     }
-    assert!(exited, "Dispute window never elapsed after fast_forward rounds");
+    assert!(
+        exited,
+        "Dispute window never elapsed after fast_forward rounds"
+    );
+
+    // The stale dispute actually refunded the buyer: status Refunded, and the
+    // buyer balance rose by exactly the deal price from its funded level.
+    let deal_1 = get_deal(&escrow, deal_id).await?;
+    assert_eq!(deal_1.status, "Refunded");
+    let buyer_after_1 = ft_balance_of(&ft, buyer.id()).await?;
+    assert_eq!(
+        buyer_after_1 - (10_000_000 - price),
+        price,
+        "Buyer must be refunded exactly the price"
+    );
+    assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
+    assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 
     // Non-buyers still cannot take the exit, even after the window.
     let (_, qr2) = qr_pair("s15b");
@@ -115,11 +131,17 @@ async fn s15_dispute_timeout_exit() -> anyhow::Result<()> {
 
     // The buyer takes the exit: Refunded, payer whole, escrow empty.
     // (deal_1 already refunded the buyer to 10M; deal_2 funds then refunds.)
+    let before = ft_balance_of(&ft, buyer.id()).await?;
     claim_dispute_timeout_refund(&escrow, &buyer, deal_2)
         .await?
         .into_result()?;
     assert_eq!(get_deal(&escrow, deal_2).await?.status, "Refunded");
-    assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000);
+    let after = ft_balance_of(&ft, buyer.id()).await?;
+    assert_eq!(
+        after - before,
+        price,
+        "Buyer balance must rise by exactly the price"
+    );
     assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 

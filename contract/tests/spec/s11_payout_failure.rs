@@ -62,6 +62,16 @@ async fn s11_payout_transfer_failure_retry() -> anyhow::Result<()> {
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
     assert_eq!(ft_balance_of(&ft, escrow.id()).await?, price);
 
+    // Re-arm the token: a panicking receipt rolls back its own writes, so the
+    // failure flag is still set and must be cleared explicitly.
+    ft_owner
+        .call(ft.id(), "set_fail_next_transfer")
+        .args_json(serde_json::json!({"fail": false}))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
     // Retry with a healthy token: the failed payout cleared the used-QR mark,
     // so the same QR scans again and the deal reaches Released.
     confirm_delivery(&escrow, &rider, deal_id, &preimage)

@@ -133,10 +133,7 @@ async fn s14_admin_dispute_resolution() -> anyhow::Result<()> {
         .await?
         .into_result()?;
     let stranger_set = set_arbiter(&escrow, &stranger, buyer.id()).await?;
-    assert!(
-        stranger_set.is_failure(),
-        "Stranger set_arbiter must fail"
-    );
+    assert!(stranger_set.is_failure(), "Stranger set_arbiter must fail");
     let error = format!("{:?}", stranger_set.into_result().unwrap_err());
     assert!(
         error.contains("ERR_NOT_OWNER"),

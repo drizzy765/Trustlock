@@ -11,6 +11,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Build a workspace WASM. `package` is the cargo package, `file_stem` the
 /// output file name without extension.
+///
+/// NOTE: no RUSTFLAGS feature juggling here. `-C target-feature=-multivalue`
+/// is silently ignored by current rustc (verified byte-identical output),
+/// and the pinned 2.13.4 sandbox accepts modern rustc output, so plain
+/// `cargo build` is correct. Do NOT post-process these artifacts with
+/// wasm-opt on old CPUs (its binary can miscompile/crash there).
 pub fn compile_wasm(package: &str, file_stem: &str) -> anyhow::Result<Vec<u8>> {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir.parent().unwrap();

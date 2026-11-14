@@ -35,7 +35,7 @@ if [ -f "$WASM_PATH" ]; then
     echo "1. Download the WASM file to your PC"
     echo "2. Run: scp codespace@...:~/trustlock/target/wasm32-unknown-unknown/release/trustlock.wasm ."
     echo "   Or use VS Code: Right-click file → Download"
-    echo "3. Deploy locally: near deploy trustlock-timi.testnet trustlock.wasm"
+    echo "3. Deploy locally: near deploy trustlock-v2-timi.testnet trustlock.wasm"
 else
     echo "❌ Build failed - WASM file not found"
     exit 1

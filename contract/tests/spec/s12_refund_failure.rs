@@ -111,7 +111,18 @@ async fn s12_refund_transfer_failure() -> anyhow::Result<()> {
     assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000 - price);
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 
+    // Re-arm the token (a panicking receipt rolls back its own writes,
+    // so the failure flag is still set and must be cleared explicitly).
+    ft_owner
+        .call(ft.id(), "set_fail_next_transfer")
+        .args_json(serde_json::json!({"fail": false}))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
     // Retry with a healthy token: the refund goes through this time.
+    let before = ft_balance_of(&ft, buyer.id()).await?;
     claim_timeout_refund(&escrow, &buyer, deal_2)
         .await?
         .into_result()?;
@@ -119,7 +130,12 @@ async fn s12_refund_transfer_failure() -> anyhow::Result<()> {
     let deal = get_deal(&escrow, deal_2).await?;
     assert_eq!(deal.status, "Refunded");
     // Payer whole, escrow empty, seller untouched: no loss, no double refund.
-    assert_eq!(ft_balance_of(&ft, buyer.id()).await?, 10_000_000);
+    let after = ft_balance_of(&ft, buyer.id()).await?;
+    assert_eq!(
+        after - before,
+        price,
+        "Buyer balance must rise by exactly the price"
+    );
     assert_eq!(ft_balance_of(&ft, escrow.id()).await?, 0);
     assert_eq!(ft_balance_of(&ft, seller.id()).await?, 0);
 
