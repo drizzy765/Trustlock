@@ -9,6 +9,23 @@ the current code. The tests describe today's behaviour, so a fix should flip the
 They were not run on the reviewer's machine (its Windows Rust toolchain cannot link); CI runs
 them with `cargo test` in the Contract Tests job.
 
+## Status of the fixes (14 November 2026, after this review was written)
+
+The branch `fix/issue-18-contract-fixes` (issue #18, not merged when this was written) already
+changes the contract for **H-2** (`resolve_dispute` and `claim_dispute_timeout_refund`) and
+**M-1** (the QR is released from `used_qr` when a payout fails), and it changes two signatures:
+`Contract::new(usdc, arbiter)` and `on_refund(deal_id, prev_status)`. When that branch merges,
+`contract/tests/security_review.rs` must be updated in the same change:
+
+- every `Contract::new(usdc())` gets an arbiter argument and `on_refund(id)` gets a `prev_status`,
+  or the test crate no longer compiles;
+- `m1_failed_payout_blocks_the_rider_retry` must flip: the retry after a failed payout now succeeds;
+- `h2_a_dispute_locks_the_funds_for_good` keeps passing for the three methods it calls, but its
+  name and the H-2 text above describe the old state; rename it once `resolve_dispute` lands.
+
+H-1, M-2, M-3, M-4 and L-1 to L-3 are not addressed by that branch as far as this review could
+tell, so their tests keep describing today's behaviour.
+
 ## Summary
 
 | ID | Severity | Finding | Where |
